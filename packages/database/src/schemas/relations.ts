@@ -4,6 +4,13 @@ import { index, pgTable, primaryKey, text, uuid, varchar } from 'drizzle-orm/pg-
 
 import { createdAt } from './_helpers';
 import { agents, agentsFiles, agentsKnowledgeBases } from './agent';
+import {
+  agentEvalBenchmarks,
+  agentEvalDatasets,
+  agentEvalRunTopics,
+  agentEvalRuns,
+  agentEvalTestCases,
+} from './agentEvals';
 import { asyncTasks } from './asyncTask';
 import { chatGroups, chatGroupsAgents } from './chatGroup';
 import { documents, files, knowledgeBases } from './file';
@@ -336,4 +343,61 @@ export const messageGroupsRelations = relations(messageGroups, ({ many, one }) =
   }),
   childGroups: many(messageGroups),
   messages: many(messages),
+}));
+
+// Agent Evaluation-related relation definitions
+export const agentEvalBenchmarksRelations = relations(agentEvalBenchmarks, ({ many }) => ({
+  datasets: many(agentEvalDatasets),
+}));
+
+export const agentEvalDatasetsRelations = relations(agentEvalDatasets, ({ one, many }) => ({
+  benchmark: one(agentEvalBenchmarks, {
+    fields: [agentEvalDatasets.benchmarkId],
+    references: [agentEvalBenchmarks.id],
+  }),
+  user: one(users, {
+    fields: [agentEvalDatasets.userId],
+    references: [users.id],
+  }),
+  testCases: many(agentEvalTestCases),
+  runs: many(agentEvalRuns),
+}));
+
+export const agentEvalTestCasesRelations = relations(agentEvalTestCases, ({ one, many }) => ({
+  dataset: one(agentEvalDatasets, {
+    fields: [agentEvalTestCases.datasetId],
+    references: [agentEvalDatasets.id],
+  }),
+  runTopics: many(agentEvalRunTopics),
+}));
+
+export const agentEvalRunsRelations = relations(agentEvalRuns, ({ one, many }) => ({
+  dataset: one(agentEvalDatasets, {
+    fields: [agentEvalRuns.datasetId],
+    references: [agentEvalDatasets.id],
+  }),
+  targetAgent: one(agents, {
+    fields: [agentEvalRuns.targetAgentId],
+    references: [agents.id],
+  }),
+  user: one(users, {
+    fields: [agentEvalRuns.userId],
+    references: [users.id],
+  }),
+  runTopics: many(agentEvalRunTopics),
+}));
+
+export const agentEvalRunTopicsRelations = relations(agentEvalRunTopics, ({ one }) => ({
+  run: one(agentEvalRuns, {
+    fields: [agentEvalRunTopics.runId],
+    references: [agentEvalRuns.id],
+  }),
+  topic: one(topics, {
+    fields: [agentEvalRunTopics.topicId],
+    references: [topics.id],
+  }),
+  testCase: one(agentEvalTestCases, {
+    fields: [agentEvalRunTopics.testCaseId],
+    references: [agentEvalTestCases.id],
+  }),
 }));

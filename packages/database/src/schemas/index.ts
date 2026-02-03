@@ -1,5 +1,6 @@
 export * from './agent';
 export * from './agentCronJob';
+export * from './agentEvals';
 export * from './aiInfra';
 export * from './apiKey';
 export * from './asyncTask';

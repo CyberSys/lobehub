@@ -40,7 +40,7 @@ export const topics = pgTable(
     clientId: text('client_id'),
     historySummary: text('history_summary'),
     metadata: jsonb('metadata').$type<ChatTopicMetadata | undefined>(),
-    trigger: text('trigger'), // 'cron' | 'chat' | 'api' - topic creation trigger source
+    trigger: text('trigger'), // 'cron' | 'chat' | 'api' | 'eval' - topic creation trigger source
     mode: text('mode'), // 'temp' | 'test' | 'default' - topic usage scenario
     ...timestamps,
   },
@@ -72,7 +72,7 @@ export const threads = pgTable(
     title: text('title'),
     content: text('content'),
     editor_data: jsonb('editor_data'),
-    type: text('type', { enum: ['continuation', 'standalone', 'isolation'] }).notNull(),
+    type: text('type', { enum: ['continuation', 'standalone', 'isolation', 'eval'] }).notNull(),
     status: text('status', {
       enum: [
         'active',
