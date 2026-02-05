@@ -22,7 +22,7 @@ export const agentSkills = pgTable(
     // 来源控制
     source: text('source', { enum: ['builtin', 'market', 'user'] }).notNull(),
 
-    // Manifest (version, author, repository, configSchema 等)
+    // Manifest (version, author, repository 等)
     manifest: jsonb('manifest').notNull().default({}),
 
     // 内容与编辑器状态
