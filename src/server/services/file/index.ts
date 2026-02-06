@@ -160,6 +160,16 @@ export class FileService {
   }
 
   /**
+   * Delete user file record but keep globalFiles record
+   * Used for GitHub skill imports where we only need globalFiles for foreign key
+   *
+   * @param fileId - File ID to delete from user's files table
+   */
+  public async deleteUserFileRecord(fileId: string): Promise<void> {
+    await this.fileModel.delete(fileId, false); // false = don't remove globalFiles
+  }
+
+  /**
    * Upload base64 data and create database record
    * @param base64Data - Base64 data (supports data URI format or pure base64)
    * @param pathname - File storage path (must include file extension)

@@ -65,12 +65,13 @@ export interface SkillResourceTreeNode {
   type: 'file' | 'directory';
 }
 
-// ===== Skill Item (for UI) =====
+// ===== Skill Item (完整结构，用于详情查询) =====
 
 export interface SkillItem {
   content?: string | null;
   createdAt: Date;
   description?: string | null;
+  editorData?: Record<string, any> | null;
   id: string;
   identifier: string;
   manifest: SkillManifest;
@@ -78,6 +79,21 @@ export interface SkillItem {
   resources?: Record<string, string> | null;
   source: SkillSource;
   updatedAt: Date;
+  zipFileHash?: string | null;
+}
+
+// ===== Skill List Item (精简结构，用于列表查询) =====
+
+export interface SkillListItem {
+  createdAt: Date;
+  description?: string | null;
+  id: string;
+  identifier: string;
+  manifest: SkillManifest;
+  name: string;
+  source: SkillSource;
+  updatedAt: Date;
+  zipFileHash?: string | null;
 }
 
 // ===== Service Input Types =====

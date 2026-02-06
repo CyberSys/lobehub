@@ -1,4 +1,5 @@
 /* eslint-disable sort-keys-fix/sort-keys-fix  */
+import { SkillManifest } from '@lobechat/types';
 import { relations } from 'drizzle-orm';
 import { index, jsonb, pgTable, text, varchar } from 'drizzle-orm/pg-core';
 
@@ -23,11 +24,14 @@ export const agentSkills = pgTable(
     source: text('source', { enum: ['builtin', 'market', 'user'] }).notNull(),
 
     // Manifest (version, author, repository 等)
-    manifest: jsonb('manifest').notNull().default({}),
+    manifest: jsonb('manifest')
+      .$type<SkillManifest>()
+      .notNull()
+      .default({} as SkillManifest),
 
     // 内容与编辑器状态
     content: text('content'),
-    editorData: jsonb('editor_data'),
+    editorData: jsonb('editor_data').$type<Record<string, any>>(),
 
     // 资源映射: Record<VirtualPath, FileId>
     resources: jsonb('resources').$type<Record<string, string>>().default({}),
@@ -64,4 +68,3 @@ export const agentSkillsRelations = relations(agentSkills, ({ one }) => ({
 }));
 
 export type NewAgentSkill = typeof agentSkills.$inferInsert;
-export type AgentSkillItem = typeof agentSkills.$inferSelect;

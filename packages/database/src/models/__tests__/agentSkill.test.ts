@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { SkillManifest } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -11,6 +12,13 @@ const serverDB: LobeChatDatabase = await getTestDB();
 
 const userId = 'agent-skill-model-test-user-id';
 const agentSkillModel = new AgentSkillModel(serverDB, userId);
+
+// Helper to create valid manifest for tests
+const createManifest = (overrides?: Partial<SkillManifest>): SkillManifest => ({
+  description: 'Test skill description',
+  name: 'Test Skill',
+  ...overrides,
+});
 
 beforeEach(async () => {
   await serverDB.delete(users);
@@ -29,13 +37,13 @@ describe('AgentSkillModel', () => {
         description: 'A test skill',
         identifier: 'test.skill',
         source: 'user' as const,
-        manifest: { version: '1.0.0' },
+        manifest: createManifest({ version: '1.0.0' }),
         content: '# Test Skill Content',
       };
 
       const skill = await agentSkillModel.create(params);
 
-      expect(skill).toMatchObject({ ...params, userId });
+      expect(skill).toMatchObject(params);
       expect(skill.id).toBeDefined();
     });
   });
@@ -48,7 +56,7 @@ describe('AgentSkillModel', () => {
           name: 'To Delete',
           identifier: 'to.delete',
           source: 'user',
-          manifest: {},
+          manifest: createManifest(),
           userId,
         })
         .returning()
@@ -71,7 +79,7 @@ describe('AgentSkillModel', () => {
           name: 'Find Me',
           identifier: 'find.me',
           source: 'user',
-          manifest: {},
+          manifest: createManifest(),
           userId,
         })
         .returning()
@@ -94,7 +102,7 @@ describe('AgentSkillModel', () => {
         name: 'By Identifier',
         identifier: 'by.identifier',
         source: 'user',
-        manifest: {},
+        manifest: createManifest(),
         userId,
       });
 
@@ -107,8 +115,20 @@ describe('AgentSkillModel', () => {
   describe('findAll', () => {
     it('should find all agent skills for user', async () => {
       await serverDB.insert(agentSkills).values([
-        { name: 'Skill 1', identifier: 'skill.1', source: 'user', manifest: {}, userId },
-        { name: 'Skill 2', identifier: 'skill.2', source: 'market', manifest: {}, userId },
+        {
+          name: 'Skill 1',
+          identifier: 'skill.1',
+          source: 'user',
+          manifest: createManifest(),
+          userId,
+        },
+        {
+          name: 'Skill 2',
+          identifier: 'skill.2',
+          source: 'market',
+          manifest: createManifest(),
+          userId,
+        },
       ]);
 
       const skills = await agentSkillModel.findAll();
@@ -121,9 +141,27 @@ describe('AgentSkillModel', () => {
       const inserted = await serverDB
         .insert(agentSkills)
         .values([
-          { name: 'Skill A', identifier: 'skill.a', source: 'user', manifest: {}, userId },
-          { name: 'Skill B', identifier: 'skill.b', source: 'user', manifest: {}, userId },
-          { name: 'Skill C', identifier: 'skill.c', source: 'user', manifest: {}, userId },
+          {
+            name: 'Skill A',
+            identifier: 'skill.a',
+            source: 'user',
+            manifest: createManifest(),
+            userId,
+          },
+          {
+            name: 'Skill B',
+            identifier: 'skill.b',
+            source: 'user',
+            manifest: createManifest(),
+            userId,
+          },
+          {
+            name: 'Skill C',
+            identifier: 'skill.c',
+            source: 'user',
+            manifest: createManifest(),
+            userId,
+          },
         ])
         .returning();
 
@@ -147,7 +185,7 @@ describe('AgentSkillModel', () => {
           name: 'Original Name',
           identifier: 'original',
           source: 'user',
-          manifest: {},
+          manifest: createManifest(),
           userId,
         })
         .returning()
@@ -165,19 +203,25 @@ describe('AgentSkillModel', () => {
   describe('listBySource', () => {
     it('should list agent skills by source', async () => {
       await serverDB.insert(agentSkills).values([
-        { name: 'User Skill', identifier: 'user.skill', source: 'user', manifest: {}, userId },
+        {
+          name: 'User Skill',
+          identifier: 'user.skill',
+          source: 'user',
+          manifest: createManifest(),
+          userId,
+        },
         {
           name: 'Market Skill',
           identifier: 'market.skill',
           source: 'market',
-          manifest: {},
+          manifest: createManifest(),
           userId,
         },
         {
           name: 'Builtin Skill',
           identifier: 'builtin.skill',
           source: 'builtin',
-          manifest: {},
+          manifest: createManifest(),
           userId,
         },
       ]);
@@ -194,8 +238,20 @@ describe('AgentSkillModel', () => {
   describe('search', () => {
     it('should search agent skills by name', async () => {
       await serverDB.insert(agentSkills).values([
-        { name: 'Coding Wizard', identifier: 'coding', source: 'user', manifest: {}, userId },
-        { name: 'Writing Helper', identifier: 'writing', source: 'user', manifest: {}, userId },
+        {
+          name: 'Coding Wizard',
+          identifier: 'coding',
+          source: 'user',
+          manifest: createManifest(),
+          userId,
+        },
+        {
+          name: 'Writing Helper',
+          identifier: 'writing',
+          source: 'user',
+          manifest: createManifest(),
+          userId,
+        },
       ]);
 
       const results = await agentSkillModel.search('Coding');
@@ -210,7 +266,7 @@ describe('AgentSkillModel', () => {
           description: 'Helps with coding tasks',
           identifier: 'a',
           source: 'user',
-          manifest: {},
+          manifest: createManifest(),
           userId,
         },
         {
@@ -218,7 +274,7 @@ describe('AgentSkillModel', () => {
           description: 'Helps with writing',
           identifier: 'b',
           source: 'user',
-          manifest: {},
+          manifest: createManifest(),
           userId,
         },
       ]);

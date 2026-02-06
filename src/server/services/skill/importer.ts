@@ -191,13 +191,15 @@ export class SkillImporter {
     if (zipHash) {
       const zipKey = `skills/zip/${zipHash}.zip`;
       await this.fileService.uploadBuffer(zipKey, zipBuffer, 'application/zip');
-      await this.fileService.createFileRecord({
+      const { fileId } = await this.fileService.createFileRecord({
         fileHash: zipHash,
         fileType: 'application/zip',
         name: `${repoInfo.repo}.zip`,
         size: zipBuffer.length,
         url: zipKey,
       });
+      // Delete user file record, only keep globalFiles for foreign key reference
+      await this.fileService.deleteUserFileRecord(fileId);
       zipFileHash = zipHash;
       log('importFromGitHub: uploaded ZIP file, hash=%s', zipFileHash);
     }

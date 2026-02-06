@@ -1,4 +1,4 @@
-import { skillManifestSchema } from '@lobechat/types';
+import { SkillManifest, skillManifestSchema } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -40,7 +40,7 @@ const updateSkillSchema = z.object({
 
 // ===== Router =====
 
-export const skillRouter = router({
+export const agentSkillsRouter = router({
   // ===== Create =====
 
   create: skillProcedure.input(createSkillSchema).mutation(async ({ ctx, input }) => {
@@ -94,6 +94,7 @@ export const skillRouter = router({
       if (input?.source) {
         return ctx.skillModel.listBySource(input.source);
       }
+
       return ctx.skillModel.findAll();
     }),
 
@@ -139,9 +140,13 @@ export const skillRouter = router({
   // ===== Update =====
 
   update: skillProcedure.input(updateSkillSchema).mutation(async ({ ctx, input }) => {
-    const { id, ...data } = input;
-    return ctx.skillModel.update(id, data);
+    const { id, manifest, ...rest } = input;
+    return ctx.skillModel.update(id, {
+      ...rest,
+      // Cast partial manifest - the model will merge with existing
+      manifest: manifest as SkillManifest | undefined,
+    });
   }),
 });
 
-export type SkillRouter = typeof skillRouter;
+export type AgentSkillsRouter = typeof agentSkillsRouter;

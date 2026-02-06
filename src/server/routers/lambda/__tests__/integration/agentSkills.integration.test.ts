@@ -2,10 +2,10 @@
 import { LobeChatDatabase } from '@lobechat/database';
 import { agentSkills } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { skillRouter } from '../../skill';
+import { agentSkillsRouter } from '../../agentSkills';
 import { cleanupTestUser, createTestContext, createTestUser } from './setup';
 
 // Mock getServerDB to return our test database instance
@@ -69,7 +69,7 @@ describe('Skill Router Integration Tests', () => {
 
   describe('create', () => {
     it('should create a new skill', async () => {
-      const caller = skillRouter.createCaller(createTestContext(userId));
+      const caller = agentSkillsRouter.createCaller(createTestContext(userId));
 
       const result = await caller.create({
         name: 'Test Skill',
@@ -86,7 +86,7 @@ describe('Skill Router Integration Tests', () => {
     });
 
     it('should create skill with custom identifier', async () => {
-      const caller = skillRouter.createCaller(createTestContext(userId));
+      const caller = agentSkillsRouter.createCaller(createTestContext(userId));
 
       const result = await caller.create({
         name: 'Custom ID Skill',
@@ -98,7 +98,7 @@ describe('Skill Router Integration Tests', () => {
     });
 
     it('should throw error for duplicate identifier', async () => {
-      const caller = skillRouter.createCaller(createTestContext(userId));
+      const caller = agentSkillsRouter.createCaller(createTestContext(userId));
 
       await caller.create({
         name: 'First Skill',
@@ -118,7 +118,7 @@ describe('Skill Router Integration Tests', () => {
 
   describe('list', () => {
     it('should list all skills for user', async () => {
-      const caller = skillRouter.createCaller(createTestContext(userId));
+      const caller = agentSkillsRouter.createCaller(createTestContext(userId));
 
       await caller.create({ name: 'Skill 1', content: '# Skill 1' });
       await caller.create({ name: 'Skill 2', content: '# Skill 2' });
@@ -135,19 +135,19 @@ describe('Skill Router Integration Tests', () => {
           name: 'User Skill',
           identifier: 'user.skill',
           source: 'user',
-          manifest: { name: 'User Skill' },
+          manifest: { name: 'User Skill', description: 'User skill description' },
           userId,
         },
         {
           name: 'Market Skill',
           identifier: 'market.skill',
           source: 'market',
-          manifest: { name: 'Market Skill' },
+          manifest: { name: 'Market Skill', description: 'Market skill description' },
           userId,
         },
       ]);
 
-      const caller = skillRouter.createCaller(createTestContext(userId));
+      const caller = agentSkillsRouter.createCaller(createTestContext(userId));
 
       const userSkills = await caller.list({ source: 'user' });
       expect(userSkills).toHaveLength(1);
@@ -161,7 +161,7 @@ describe('Skill Router Integration Tests', () => {
 
   describe('getById', () => {
     it('should get skill by id', async () => {
-      const caller = skillRouter.createCaller(createTestContext(userId));
+      const caller = agentSkillsRouter.createCaller(createTestContext(userId));
 
       const created = await caller.create({
         name: 'Get By ID Skill',
@@ -176,7 +176,7 @@ describe('Skill Router Integration Tests', () => {
     });
 
     it('should return undefined for non-existent id', async () => {
-      const caller = skillRouter.createCaller(createTestContext(userId));
+      const caller = agentSkillsRouter.createCaller(createTestContext(userId));
 
       const result = await caller.getById({ id: 'non-existent-id' });
 
@@ -186,7 +186,7 @@ describe('Skill Router Integration Tests', () => {
 
   describe('getByIdentifier', () => {
     it('should get skill by identifier', async () => {
-      const caller = skillRouter.createCaller(createTestContext(userId));
+      const caller = agentSkillsRouter.createCaller(createTestContext(userId));
 
       await caller.create({
         name: 'By Identifier',
@@ -203,7 +203,7 @@ describe('Skill Router Integration Tests', () => {
 
   describe('search', () => {
     it('should search skills by name', async () => {
-      const caller = skillRouter.createCaller(createTestContext(userId));
+      const caller = agentSkillsRouter.createCaller(createTestContext(userId));
 
       await caller.create({ name: 'TypeScript Expert', content: '# TS' });
       await caller.create({ name: 'Python Master', content: '# Py' });
@@ -221,7 +221,7 @@ describe('Skill Router Integration Tests', () => {
           description: 'Helps with coding tasks',
           identifier: 'search.a',
           source: 'user',
-          manifest: { name: 'Skill A' },
+          manifest: { name: 'Skill A', description: 'Helps with coding tasks' },
           userId,
         },
         {
@@ -229,12 +229,12 @@ describe('Skill Router Integration Tests', () => {
           description: 'Helps with writing',
           identifier: 'search.b',
           source: 'user',
-          manifest: { name: 'Skill B' },
+          manifest: { name: 'Skill B', description: 'Helps with writing' },
           userId,
         },
       ]);
 
-      const caller = skillRouter.createCaller(createTestContext(userId));
+      const caller = agentSkillsRouter.createCaller(createTestContext(userId));
 
       const result = await caller.search({ query: 'coding' });
 
@@ -245,7 +245,7 @@ describe('Skill Router Integration Tests', () => {
 
   describe('update', () => {
     it('should update skill', async () => {
-      const caller = skillRouter.createCaller(createTestContext(userId));
+      const caller = agentSkillsRouter.createCaller(createTestContext(userId));
 
       const created = await caller.create({
         name: 'Original Name',
@@ -265,7 +265,7 @@ describe('Skill Router Integration Tests', () => {
     });
 
     it('should update skill manifest', async () => {
-      const caller = skillRouter.createCaller(createTestContext(userId));
+      const caller = agentSkillsRouter.createCaller(createTestContext(userId));
 
       const created = await caller.create({
         name: 'Manifest Test',
@@ -291,7 +291,7 @@ describe('Skill Router Integration Tests', () => {
 
   describe('delete', () => {
     it('should delete skill', async () => {
-      const caller = skillRouter.createCaller(createTestContext(userId));
+      const caller = agentSkillsRouter.createCaller(createTestContext(userId));
 
       const created = await caller.create({
         name: 'To Delete',
@@ -306,7 +306,7 @@ describe('Skill Router Integration Tests', () => {
     });
 
     it('should not affect other skills when deleting', async () => {
-      const caller = skillRouter.createCaller(createTestContext(userId));
+      const caller = agentSkillsRouter.createCaller(createTestContext(userId));
 
       const skill1 = await caller.create({ name: 'Skill 1', content: '# 1' });
       const skill2 = await caller.create({ name: 'Skill 2', content: '# 2' });
@@ -322,7 +322,7 @@ describe('Skill Router Integration Tests', () => {
 
   describe('listResources', () => {
     it('should return empty array for skill without resources', async () => {
-      const caller = skillRouter.createCaller(createTestContext(userId));
+      const caller = agentSkillsRouter.createCaller(createTestContext(userId));
 
       const created = await caller.create({
         name: 'No Resources',
@@ -336,7 +336,7 @@ describe('Skill Router Integration Tests', () => {
     });
 
     it('should throw for non-existent skill', async () => {
-      const caller = skillRouter.createCaller(createTestContext(userId));
+      const caller = agentSkillsRouter.createCaller(createTestContext(userId));
 
       // getById returns undefined, which triggers NOT_FOUND TRPCError
       await expect(caller.listResources({ skillId: 'non-existent' })).rejects.toThrow();
@@ -345,7 +345,7 @@ describe('Skill Router Integration Tests', () => {
 
   describe('readResource', () => {
     it('should throw for non-existent skill', async () => {
-      const caller = skillRouter.createCaller(createTestContext(userId));
+      const caller = agentSkillsRouter.createCaller(createTestContext(userId));
 
       // getById returns undefined, which triggers NOT_FOUND TRPCError
       await expect(
@@ -354,7 +354,7 @@ describe('Skill Router Integration Tests', () => {
     });
 
     it('should throw for skill without resources', async () => {
-      const caller = skillRouter.createCaller(createTestContext(userId));
+      const caller = agentSkillsRouter.createCaller(createTestContext(userId));
 
       const created = await caller.create({
         name: 'No Resources',
@@ -386,7 +386,7 @@ describe('Skill Router Integration Tests', () => {
         zipHash: undefined,
       });
 
-      const caller = skillRouter.createCaller(createTestContext(userId));
+      const caller = agentSkillsRouter.createCaller(createTestContext(userId));
 
       const result = await caller.importFromGitHub({
         gitUrl: 'https://github.com/openclaw/openclaw/tree/main/skills/skill-creator',
@@ -434,7 +434,7 @@ describe('Skill Router Integration Tests', () => {
         };
       });
 
-      const caller = skillRouter.createCaller(createTestContext(userId));
+      const caller = agentSkillsRouter.createCaller(createTestContext(userId));
 
       // First import
       const first = await caller.importFromGitHub({
@@ -456,12 +456,12 @@ describe('Skill Router Integration Tests', () => {
   describe('user isolation', () => {
     it('should not access skills from other users', async () => {
       // Create skill for original user
-      const caller1 = skillRouter.createCaller(createTestContext(userId));
+      const caller1 = agentSkillsRouter.createCaller(createTestContext(userId));
       await caller1.create({ name: 'User 1 Skill', content: '# User 1' });
 
       // Create another user
       const otherUserId = await createTestUser(serverDB);
-      const caller2 = skillRouter.createCaller(createTestContext(otherUserId));
+      const caller2 = agentSkillsRouter.createCaller(createTestContext(otherUserId));
 
       // Other user should not see original user's skills
       const otherUserSkills = await caller2.list();
@@ -472,12 +472,12 @@ describe('Skill Router Integration Tests', () => {
     });
 
     it('should not update skills from other users', async () => {
-      const caller1 = skillRouter.createCaller(createTestContext(userId));
+      const caller1 = agentSkillsRouter.createCaller(createTestContext(userId));
       const created = await caller1.create({ name: 'Original', content: '# Original' });
 
       // Create another user
       const otherUserId = await createTestUser(serverDB);
-      const caller2 = skillRouter.createCaller(createTestContext(otherUserId));
+      const caller2 = agentSkillsRouter.createCaller(createTestContext(otherUserId));
 
       // Try to update (should not affect the skill due to userId filter)
       await caller2.update({ id: created.id, name: 'Hacked' });
@@ -490,12 +490,12 @@ describe('Skill Router Integration Tests', () => {
     });
 
     it('should not delete skills from other users', async () => {
-      const caller1 = skillRouter.createCaller(createTestContext(userId));
+      const caller1 = agentSkillsRouter.createCaller(createTestContext(userId));
       const created = await caller1.create({ name: 'Protected', content: '# Protected' });
 
       // Create another user
       const otherUserId = await createTestUser(serverDB);
-      const caller2 = skillRouter.createCaller(createTestContext(otherUserId));
+      const caller2 = agentSkillsRouter.createCaller(createTestContext(otherUserId));
 
       // Try to delete (should not affect the skill due to userId filter)
       await caller2.delete({ id: created.id });
