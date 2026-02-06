@@ -53,10 +53,20 @@ export interface ParsedZipSkill {
   content: string;
   manifest: SkillManifest;
   resources: Map<string, Buffer>;
+  /**
+   * Repacked skill directory ZIP buffer (only when repackSkillZip=true)
+   * Used for GitHub imports to store only the skill directory, not the full repo
+   */
+  skillZipBuffer?: Buffer;
   zipHash?: string;
 }
 
 // ===== Resource Types =====
+
+export interface SkillResourceMeta {
+  documentId?: string;
+  fileHash: string;
+}
 
 export interface SkillResourceTreeNode {
   children?: SkillResourceTreeNode[];
@@ -76,7 +86,7 @@ export interface SkillItem {
   identifier: string;
   manifest: SkillManifest;
   name: string;
-  resources?: Record<string, string> | null;
+  resources?: Record<string, SkillResourceMeta> | null;
   source: SkillSource;
   updatedAt: Date;
   zipFileHash?: string | null;

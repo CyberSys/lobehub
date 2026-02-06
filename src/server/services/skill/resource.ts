@@ -1,10 +1,9 @@
 import { type LobeChatDatabase } from '@lobechat/database';
-import { type SkillResourceTreeNode } from '@lobechat/types';
+import { type SkillResourceMeta, type SkillResourceTreeNode } from '@lobechat/types';
 import debug from 'debug';
 import { sha256 } from 'js-sha256';
 import mime from 'mime';
 
-import { FileModel } from '@/database/models/file';
 import { FileService } from '@/server/services/file';
 
 import { SkillResourceError } from './errors';
@@ -12,33 +11,33 @@ import { SkillResourceError } from './errors';
 const log = debug('lobe-chat:service:skill-resource');
 
 export class SkillResourceService {
-  private fileModel: FileModel;
   private fileService: FileService;
 
   constructor(db: LobeChatDatabase, userId: string) {
     this.fileService = new FileService(db, userId);
-    this.fileModel = new FileModel(db, userId);
   }
 
   /**
-   * Store resource files to S3/files table
+   * Store resource files to S3/globalFiles
    * Uses zipHash as path prefix for deduplication
+   * Only creates globalFiles records (no user files)
    *
    * @param zipHash - ZIP package hash for deduplication
    * @param resources - Resource file mapping Map<VirtualPath, Buffer>
+   * @returns Record<VirtualPath, SkillResourceMeta> mapping
    */
   async storeResources(
     zipHash: string,
     resources: Map<string, Buffer>,
-  ): Promise<Record<string, string>> {
+  ): Promise<Record<string, SkillResourceMeta>> {
     log('storeResources: starting with zipHash=%s, resourceCount=%d', zipHash, resources.size);
-    const result: Record<string, string> = {};
+    const result: Record<string, SkillResourceMeta> = {};
 
     for (const [virtualPath, buffer] of resources) {
       log('storeResources: storing resource path=%s, size=%d bytes', virtualPath, buffer.length);
-      const fileId = await this.storeResource(zipHash, virtualPath, buffer);
-      result[virtualPath] = fileId;
-      log('storeResources: stored resource path=%s, fileId=%s', virtualPath, fileId);
+      const fileHash = await this.storeResource(zipHash, virtualPath, buffer);
+      result[virtualPath] = { fileHash };
+      log('storeResources: stored resource path=%s, fileHash=%s', virtualPath, fileHash);
     }
 
     log('storeResources: completed, stored %d resources', Object.keys(result).length);
@@ -46,13 +45,23 @@ export class SkillResourceService {
   }
 
   /**
-   * Read resource file content
+   * Read resource file content by hash
+   *
+   * @param resources - Record<VirtualPath, SkillResourceMeta> mapping
+   * @param virtualPath - Virtual path to read
    */
-  async readResource(resourceIds: Record<string, string>, virtualPath: string): Promise<string> {
-    log('readResource: reading path=%s, availablePaths=%o', virtualPath, Object.keys(resourceIds));
-    const key = await this.getResourceKey(resourceIds, virtualPath);
-    log('readResource: resolved key=%s', key);
-    const content = await this.fileService.getFileContent(key);
+  async readResource(
+    resources: Record<string, SkillResourceMeta>,
+    virtualPath: string,
+  ): Promise<string> {
+    log('readResource: reading path=%s, availablePaths=%o', virtualPath, Object.keys(resources));
+    const meta = resources[virtualPath];
+    if (!meta) {
+      log('readResource: resource not found in mapping, path=%s', virtualPath);
+      throw new SkillResourceError(`Resource not found: ${virtualPath}`);
+    }
+    log('readResource: found fileHash=%s', meta.fileHash);
+    const content = await this.fileService.getFileContentByHash(meta.fileHash);
     log('readResource: fetched content length=%d', content.length);
     return content;
   }
@@ -60,8 +69,8 @@ export class SkillResourceService {
   /**
    * Build resource directory tree structure
    */
-  listResources(resourceIds: Record<string, string>): SkillResourceTreeNode[] {
-    const paths = Object.keys(resourceIds);
+  listResources(resources: Record<string, SkillResourceMeta>): SkillResourceTreeNode[] {
+    const paths = Object.keys(resources);
     log('listResources: building tree for %d paths', paths.length);
     const tree = this.buildTree(paths);
     log('listResources: built tree with %d root nodes', tree.length);
@@ -86,42 +95,25 @@ export class SkillResourceService {
     await this.fileService.uploadBuffer(key, buffer, fileType);
     log('storeResource: uploaded to S3 with contentType=%s', fileType);
 
-    // Create file record (handles globalFiles deduplication internally)
+    // Create globalFiles record only (no user files)
     const fileHash = sha256(buffer);
-    log('storeResource: creating file record hash=%s, type=%s', fileHash, fileType);
+    log('storeResource: creating global file record hash=%s, type=%s', fileHash, fileType);
 
-    const { fileId } = await this.fileService.createFileRecord({
+    // Extract filename and dirname from key (actual storage path)
+    const lastSlash = key.lastIndexOf('/');
+    const filename = lastSlash >= 0 ? key.slice(lastSlash + 1) : key;
+    const dirname = lastSlash >= 0 ? key.slice(0, lastSlash) : '';
+
+    await this.fileService.createGlobalFile({
       fileHash,
       fileType,
-      name: virtualPath.split('/').pop() || virtualPath,
+      metadata: { dirname, filename, path: key },
       size: buffer.length,
       url: key,
     });
 
-    log('storeResource: created file record fileId=%s', fileId);
-    return fileId;
-  }
-
-  private async getResourceKey(
-    resourceIds: Record<string, string>,
-    virtualPath: string,
-  ): Promise<string> {
-    log('getResourceKey: looking up path=%s', virtualPath);
-    const fileId = resourceIds[virtualPath];
-    if (!fileId) {
-      log('getResourceKey: resource not found in mapping, path=%s', virtualPath);
-      throw new SkillResourceError(`Resource not found: ${virtualPath}`);
-    }
-
-    log('getResourceKey: found fileId=%s, fetching file record', fileId);
-    const file = await this.fileModel.findById(fileId);
-    if (!file) {
-      log('getResourceKey: file record not found in DB, fileId=%s', fileId);
-      throw new SkillResourceError(`File record not found: ${fileId}`);
-    }
-
-    log('getResourceKey: resolved url=%s', file.url);
-    return file.url;
+    log('storeResource: created global file record fileHash=%s', fileHash);
+    return fileHash;
   }
 
   private buildTree(paths: string[]): SkillResourceTreeNode[] {

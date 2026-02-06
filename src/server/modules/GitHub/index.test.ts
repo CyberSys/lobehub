@@ -43,7 +43,6 @@ describe('GitHub', () => {
       });
     });
 
-    // Fix: https://linear.app/lobehub/issue/LOBE-4756
     // When URL contains subdirectory path like /tree/main/skills/skill-creator,
     // the path should be captured and returned
     it('should capture subdirectory path from GitHub URL', () => {

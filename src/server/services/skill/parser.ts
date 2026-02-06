@@ -4,7 +4,7 @@ import {
   type SkillManifest,
   skillManifestSchema,
 } from '@lobechat/types';
-import { unzip as fflateUnzip } from 'fflate';
+import { unzip as fflateUnzip, zip as fflateZip } from 'fflate';
 import matter from 'gray-matter';
 import { sha256 } from 'js-sha256';
 import { readFile } from 'node:fs/promises';
@@ -18,6 +18,14 @@ export interface ParseZipOptions {
    * https://github.com/owner/repo/tree/main/skills/skill-name
    */
   basePath?: string;
+  /**
+   * Whether to repack only the skill directory into a new ZIP
+   * Used for GitHub imports to avoid storing the entire repo ZIP
+   * When true:
+   * - skillZipBuffer will contain the repacked skill directory
+   * - zipHash will be the hash of the repacked ZIP (not the original)
+   */
+  repackSkillZip?: boolean;
 }
 
 export class SkillParser {
@@ -81,7 +89,14 @@ export class SkillParser {
       // Extract resource files
       const resources = this.extractResources(unzipped, skillMdPath);
 
-      // Calculate ZIP hash
+      // If repackSkillZip is true, create a new ZIP with only the skill files
+      if (options?.repackSkillZip) {
+        const skillZipBuffer = await this.repackSkillZip(skillMdContent, resources);
+        const zipHash = sha256(skillZipBuffer);
+        return { content, manifest, resources, skillZipBuffer, zipHash };
+      }
+
+      // Calculate ZIP hash from original buffer
       const zipHash = sha256(buffer);
 
       return { content, manifest, resources, zipHash };
@@ -115,6 +130,35 @@ export class SkillParser {
       fflateUnzip(new Uint8Array(buffer), (error, unzipped) => {
         if (error) reject(new SkillParseError('Failed to unzip buffer', error));
         else resolve(unzipped);
+      });
+    });
+  }
+
+  /**
+   * Repack skill directory into a new ZIP
+   * Creates a ZIP containing only SKILL.md and resources with normalized paths
+   * Uses fixed mtime to ensure deterministic output (same content = same hash)
+   */
+  private repackSkillZip(skillMdContent: string, resources: Map<string, Buffer>): Promise<Buffer> {
+    return new Promise((resolve, reject) => {
+      // Use fixed timestamp (1980-01-01) for deterministic output
+      // ZIP format requires dates in 1980-2099 range
+      const fixedMtime = new Date('1980-01-01T00:00:00Z');
+
+      // Use Zippable format with fixed mtime for deterministic output
+      const files: Record<string, [Uint8Array, { mtime: Date }]> = {
+        'SKILL.md': [new TextEncoder().encode(skillMdContent), { mtime: fixedMtime }],
+      };
+
+      // Add all resources with their relative paths (sorted for determinism)
+      const sortedPaths = [...resources.keys()].sort();
+      for (const path of sortedPaths) {
+        files[path] = [new Uint8Array(resources.get(path)!), { mtime: fixedMtime }];
+      }
+
+      fflateZip(files, { level: 6 }, (error, data) => {
+        if (error) reject(new SkillParseError('Failed to repack skill ZIP', error));
+        else resolve(Buffer.from(data));
       });
     });
   }
@@ -156,7 +200,9 @@ export class SkillParser {
       }
 
       // Fallback: try to find SKILL.md that contains the basePath
-      const basePathPattern = new RegExp(`^[^/]+/${basePath.replaceAll(/^\/|\/$/g, '')}/SKILL\\.md$`);
+      const basePathPattern = new RegExp(
+        `^[^/]+/${basePath.replaceAll(/^\/|\/$/g, '')}/SKILL\\.md$`,
+      );
       const matchWithBasePath = allPaths.find((path) => basePathPattern.test(path));
 
       if (matchWithBasePath) {

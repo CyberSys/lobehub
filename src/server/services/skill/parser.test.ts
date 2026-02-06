@@ -1,4 +1,5 @@
-import { zip } from 'fflate';
+import { unzip, zip } from 'fflate';
+import { sha256 } from 'js-sha256';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -12,6 +13,15 @@ const createZip = (files: Record<string, Uint8Array>): Promise<Uint8Array> => {
     zip(files, (error, data) => {
       if (error) reject(error);
       else resolve(data);
+    });
+  });
+};
+
+const extractZip = (data: Uint8Array): Promise<Record<string, Uint8Array>> => {
+  return new Promise((resolve, reject) => {
+    unzip(data, (error, unzipped) => {
+      if (error) reject(error);
+      else resolve(unzipped);
     });
   });
 };
@@ -378,7 +388,6 @@ Nested content`;
       expect(result.manifest.name).toBe('root-skill');
     });
 
-    // Fix: https://linear.app/lobehub/issue/LOBE-4756
     // When importing from GitHub URL like https://github.com/openclaw/openclaw/tree/main/skills/skill-creator,
     // the downloaded ZIP has structure: openclaw-main/skills/skill-creator/SKILL.md
     // parseZipPackage should accept a basePath parameter to look in the correct subdirectory
@@ -459,6 +468,206 @@ Root content`;
       const result = await parser.parseZipPackage(Buffer.from(zipped));
 
       expect(result.manifest.name).toBe('root-skill');
+    });
+  });
+
+  describe('parseZipPackage with repackSkillZip', () => {
+    it('should not return skillZipBuffer when repackSkillZip is false/undefined', async () => {
+      const skillMd = `---
+name: user-skill
+description: User uploaded skill
+---
+User skill content`;
+
+      const testFiles = {
+        'SKILL.md': new TextEncoder().encode(skillMd),
+        'resource.txt': new TextEncoder().encode('Resource content'),
+      };
+
+      const zipped = await createZip(testFiles);
+      const buffer = Buffer.from(zipped);
+
+      const result = await parser.parseZipPackage(buffer);
+
+      expect(result.skillZipBuffer).toBeUndefined();
+      // zipHash should be the hash of the original ZIP
+      expect(result.zipHash).toBe(sha256(buffer));
+    });
+
+    it('should return repacked skillZipBuffer when repackSkillZip is true', async () => {
+      const skillMd = `---
+name: github-skill
+description: GitHub imported skill
+---
+GitHub skill content`;
+
+      // Simulate large GitHub repo ZIP with skill in subdirectory
+      const testFiles = {
+        'repo-main/LICENSE': new TextEncoder().encode('MIT License text...'),
+        'repo-main/README.md': new TextEncoder().encode('# Large Repository\n'.repeat(1000)),
+        'repo-main/other-folder/large-file.txt': new TextEncoder().encode('x'.repeat(10000)),
+        'repo-main/skills/my-skill/SKILL.md': new TextEncoder().encode(skillMd),
+        'repo-main/skills/my-skill/resources/template.md': new TextEncoder().encode('Template'),
+      };
+
+      const zipped = await createZip(testFiles);
+      const buffer = Buffer.from(zipped);
+
+      const result = await parser.parseZipPackage(buffer, {
+        basePath: 'skills/my-skill',
+        repackSkillZip: true,
+      });
+
+      expect(result.skillZipBuffer).toBeDefined();
+      // zipHash should be the hash of the repacked ZIP, not the original
+      expect(result.zipHash).toBe(sha256(result.skillZipBuffer!));
+      expect(result.zipHash).not.toBe(sha256(buffer));
+      // skillZipBuffer should be much smaller than original ZIP
+      expect(result.skillZipBuffer!.length).toBeLessThan(buffer.length);
+    });
+
+    it('should produce consistent hash for same skill content even when repo changes', async () => {
+      const skillMd = `---
+name: stable-skill
+description: Skill with stable content
+---
+Stable content`;
+
+      // V1: Original repo
+      const testFilesV1 = {
+        'repo-main/README.md': new TextEncoder().encode('# Version 1'),
+        'repo-main/skills/my-skill/SKILL.md': new TextEncoder().encode(skillMd),
+        'repo-main/skills/my-skill/resource.txt': new TextEncoder().encode('Resource'),
+      };
+
+      // V2: Repo changed (README updated), but skill directory unchanged
+      const testFilesV2 = {
+        'repo-main/CHANGELOG.md': new TextEncoder().encode('# Changelog\n- Added feature'),
+        'repo-main/README.md': new TextEncoder().encode('# Version 2 - Updated!'),
+        'repo-main/skills/my-skill/SKILL.md': new TextEncoder().encode(skillMd),
+        'repo-main/skills/my-skill/resource.txt': new TextEncoder().encode('Resource'),
+      };
+
+      const zippedV1 = await createZip(testFilesV1);
+      const zippedV2 = await createZip(testFilesV2);
+
+      const result1 = await parser.parseZipPackage(Buffer.from(zippedV1), {
+        basePath: 'skills/my-skill',
+        repackSkillZip: true,
+      });
+      const result2 = await parser.parseZipPackage(Buffer.from(zippedV2), {
+        basePath: 'skills/my-skill',
+        repackSkillZip: true,
+      });
+
+      // Same skill content should produce same hash
+      expect(result1.zipHash).toBe(result2.zipHash);
+    });
+
+    it('should produce different hash when skill content changes', async () => {
+      const skillMdV1 = `---
+name: changing-skill
+description: Version 1
+---
+Content V1`;
+
+      const skillMdV2 = `---
+name: changing-skill
+description: Version 2
+---
+Content V2 with updates`;
+
+      const testFilesV1 = {
+        'repo-main/skills/my-skill/SKILL.md': new TextEncoder().encode(skillMdV1),
+      };
+
+      const testFilesV2 = {
+        'repo-main/skills/my-skill/SKILL.md': new TextEncoder().encode(skillMdV2),
+      };
+
+      const zippedV1 = await createZip(testFilesV1);
+      const zippedV2 = await createZip(testFilesV2);
+
+      const result1 = await parser.parseZipPackage(Buffer.from(zippedV1), {
+        basePath: 'skills/my-skill',
+        repackSkillZip: true,
+      });
+      const result2 = await parser.parseZipPackage(Buffer.from(zippedV2), {
+        basePath: 'skills/my-skill',
+        repackSkillZip: true,
+      });
+
+      // Different skill content should produce different hash
+      expect(result1.zipHash).not.toBe(result2.zipHash);
+    });
+
+    it('repacked ZIP should contain only skill files', async () => {
+      const skillMd = `---
+name: isolated-skill
+description: Isolated skill
+---
+Skill content`;
+
+      const testFiles = {
+        'repo-main/LICENSE': new TextEncoder().encode('MIT'),
+        'repo-main/README.md': new TextEncoder().encode('# Repo README'),
+        'repo-main/other-skill/SKILL.md': new TextEncoder().encode(
+          '---\nname: other\ndescription: other\n---\nOther',
+        ),
+        'repo-main/skills/my-skill/SKILL.md': new TextEncoder().encode(skillMd),
+        'repo-main/skills/my-skill/docs/guide.md': new TextEncoder().encode('Guide'),
+        'repo-main/skills/my-skill/examples/example.md': new TextEncoder().encode('Example'),
+      };
+
+      const zipped = await createZip(testFiles);
+
+      const result = await parser.parseZipPackage(Buffer.from(zipped), {
+        basePath: 'skills/my-skill',
+        repackSkillZip: true,
+      });
+
+      // Extract the repacked ZIP and verify contents
+      const unzipped = await extractZip(result.skillZipBuffer!);
+      const files = Object.keys(unzipped);
+
+      // Should contain SKILL.md and skill resources
+      expect(files).toContain('SKILL.md');
+      expect(files).toContain('docs/guide.md');
+      expect(files).toContain('examples/example.md');
+
+      // Should NOT contain repo root files or other skills
+      expect(files).not.toContain('LICENSE');
+      expect(files).not.toContain('README.md');
+      expect(files).not.toContain('repo-main/LICENSE');
+      expect(files).not.toContain('other-skill/SKILL.md');
+    });
+
+    it('should work with root SKILL.md when repackSkillZip is true', async () => {
+      const skillMd = `---
+name: root-skill
+description: Root skill
+---
+Root content`;
+
+      const testFiles = {
+        'SKILL.md': new TextEncoder().encode(skillMd),
+        'resource.txt': new TextEncoder().encode('Resource'),
+      };
+
+      const zipped = await createZip(testFiles);
+      const buffer = Buffer.from(zipped);
+
+      const result = await parser.parseZipPackage(buffer, {
+        repackSkillZip: true,
+      });
+
+      expect(result.skillZipBuffer).toBeDefined();
+      expect(result.zipHash).toBe(sha256(result.skillZipBuffer!));
+
+      // Verify repacked content
+      const unzipped = await extractZip(result.skillZipBuffer!);
+      expect(Object.keys(unzipped)).toContain('SKILL.md');
+      expect(Object.keys(unzipped)).toContain('resource.txt');
     });
   });
 

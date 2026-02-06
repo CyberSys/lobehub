@@ -1,5 +1,5 @@
 /* eslint-disable sort-keys-fix/sort-keys-fix  */
-import { SkillManifest } from '@lobechat/types';
+import { SkillManifest, SkillResourceMeta } from '@lobechat/types';
 import { relations } from 'drizzle-orm';
 import { index, jsonb, pgTable, text, varchar } from 'drizzle-orm/pg-core';
 
@@ -33,8 +33,8 @@ export const agentSkills = pgTable(
     content: text('content'),
     editorData: jsonb('editor_data').$type<Record<string, any>>(),
 
-    // 资源映射: Record<VirtualPath, FileId>
-    resources: jsonb('resources').$type<Record<string, string>>().default({}),
+    // 资源映射: Record<VirtualPath, SkillResourceMeta>
+    resources: jsonb('resources').$type<Record<string, SkillResourceMeta>>().default({}),
 
     // 原始分发包 (CAS)
     zipFileHash: varchar('zip_file_hash', { length: 64 }).references(() => globalFiles.hashId, {

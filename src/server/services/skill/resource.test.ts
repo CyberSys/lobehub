@@ -1,20 +1,18 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SkillResourceService } from './resource';
 
-// Mock FileService and FileModel
+// Create mock functions that can be inspected
+const mockCreateGlobalFile = vi.fn().mockResolvedValue({ fileHash: 'mock-file-hash' });
+const mockGetFileContentByHash = vi.fn().mockResolvedValue('file content');
+const mockUploadBuffer = vi.fn().mockResolvedValue({ key: 'mock-key' });
+
+// Mock FileService only (no longer need FileModel)
 vi.mock('@/server/services/file', () => ({
   FileService: vi.fn().mockImplementation(() => ({
-    createFileRecord: vi.fn().mockResolvedValue({ fileId: 'mock-file-id', url: '/f/mock-file-id' }),
-    getFileContent: vi.fn().mockResolvedValue('file content'),
-    uploadBuffer: vi.fn().mockResolvedValue({ key: 'mock-key' }),
-    uploadMedia: vi.fn().mockResolvedValue({ key: 'mock-key' }),
-  })),
-}));
-
-vi.mock('@/database/models/file', () => ({
-  FileModel: vi.fn().mockImplementation(() => ({
-    findById: vi.fn().mockResolvedValue({ id: 'mock-file-id', url: 'skills/abc123/test.txt' }),
+    createGlobalFile: mockCreateGlobalFile,
+    getFileContentByHash: mockGetFileContentByHash,
+    uploadBuffer: mockUploadBuffer,
   })),
 }));
 
@@ -22,12 +20,12 @@ describe('SkillResourceService', () => {
   describe('listResources (buildTree)', () => {
     it('should build flat file list', () => {
       const service = new SkillResourceService({} as any, 'user-1');
-      const resourceIds = {
-        'README.md': 'file1',
-        'config.json': 'file2',
+      const resources = {
+        'README.md': { fileHash: 'hash1' },
+        'config.json': { fileHash: 'hash2' },
       };
 
-      const tree = service.listResources(resourceIds);
+      const tree = service.listResources(resources);
 
       expect(tree).toHaveLength(2);
       expect(tree[0]).toEqual({
@@ -46,13 +44,13 @@ describe('SkillResourceService', () => {
 
     it('should build nested directory structure', () => {
       const service = new SkillResourceService({} as any, 'user-1');
-      const resourceIds = {
-        'lib/utils.ts': 'file1',
-        'lib/helpers.ts': 'file2',
-        'src/index.ts': 'file3',
+      const resources = {
+        'lib/utils.ts': { fileHash: 'hash1' },
+        'lib/helpers.ts': { fileHash: 'hash2' },
+        'src/index.ts': { fileHash: 'hash3' },
       };
 
-      const tree = service.listResources(resourceIds);
+      const tree = service.listResources(resources);
 
       expect(tree).toHaveLength(2);
 
@@ -73,11 +71,11 @@ describe('SkillResourceService', () => {
 
     it('should build deeply nested structure', () => {
       const service = new SkillResourceService({} as any, 'user-1');
-      const resourceIds = {
-        'a/b/c/d.txt': 'file1',
+      const resources = {
+        'a/b/c/d.txt': { fileHash: 'hash1' },
       };
 
-      const tree = service.listResources(resourceIds);
+      const tree = service.listResources(resources);
 
       expect(tree).toHaveLength(1);
       expect(tree[0].name).toBe('a');
@@ -90,13 +88,13 @@ describe('SkillResourceService', () => {
 
     it('should handle mixed files and directories', () => {
       const service = new SkillResourceService({} as any, 'user-1');
-      const resourceIds = {
-        'README.md': 'file1',
-        'lib/index.ts': 'file2',
-        'lib/utils/helper.ts': 'file3',
+      const resources = {
+        'README.md': { fileHash: 'hash1' },
+        'lib/index.ts': { fileHash: 'hash2' },
+        'lib/utils/helper.ts': { fileHash: 'hash3' },
       };
 
-      const tree = service.listResources(resourceIds);
+      const tree = service.listResources(resources);
 
       expect(tree).toHaveLength(2);
 
@@ -123,20 +121,25 @@ describe('SkillResourceService', () => {
 
     it('should sort paths alphabetically', () => {
       const service = new SkillResourceService({} as any, 'user-1');
-      const resourceIds = {
-        'z.txt': 'file1',
-        'a.txt': 'file2',
-        'm.txt': 'file3',
+      const resources = {
+        'z.txt': { fileHash: 'hash1' },
+        'a.txt': { fileHash: 'hash2' },
+        'm.txt': { fileHash: 'hash3' },
       };
 
-      const tree = service.listResources(resourceIds);
+      const tree = service.listResources(resources);
 
       expect(tree.map((n) => n.name)).toEqual(['a.txt', 'm.txt', 'z.txt']);
     });
   });
 
   describe('storeResources', () => {
-    it('should store resources with zipHash prefix', async () => {
+    beforeEach(() => {
+      mockCreateGlobalFile.mockClear();
+      mockUploadBuffer.mockClear();
+    });
+
+    it('should store resources with zipHash prefix and return SkillResourceMeta', async () => {
       const service = new SkillResourceService({} as any, 'user-1');
       const resources = new Map([
         ['README.md', Buffer.from('# README')],
@@ -146,8 +149,47 @@ describe('SkillResourceService', () => {
       const result = await service.storeResources('abc123hash', resources);
 
       expect(Object.keys(result)).toHaveLength(2);
-      expect(result['README.md']).toBe('mock-file-id');
-      expect(result['lib/utils.ts']).toBe('mock-file-id');
+      // Result should be Record<VirtualPath, SkillResourceMeta>
+      expect(result['README.md']).toHaveProperty('fileHash');
+      expect(result['README.md'].fileHash).toHaveLength(64); // sha256 hash length
+      expect(result['lib/utils.ts']).toHaveProperty('fileHash');
+      expect(result['lib/utils.ts'].fileHash).toHaveLength(64);
+    });
+
+    it('should pass correct metadata to createGlobalFile', async () => {
+      const service = new SkillResourceService({} as any, 'user-1');
+      const resources = new Map([['docs/guide.md', Buffer.from('# Guide')]]);
+
+      await service.storeResources('zip123', resources);
+
+      expect(mockCreateGlobalFile).toHaveBeenCalledWith(
+        expect.objectContaining({
+          fileType: 'text/markdown',
+          metadata: {
+            dirname: 'skills/source_files/zip123/docs',
+            filename: 'guide.md',
+            path: 'skills/source_files/zip123/docs/guide.md',
+          },
+          url: 'skills/source_files/zip123/docs/guide.md',
+        }),
+      );
+    });
+
+    it('should pass correct metadata for root-level files', async () => {
+      const service = new SkillResourceService({} as any, 'user-1');
+      const resources = new Map([['README.md', Buffer.from('# README')]]);
+
+      await service.storeResources('zip456', resources);
+
+      expect(mockCreateGlobalFile).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metadata: {
+            dirname: 'skills/source_files/zip456',
+            filename: 'README.md',
+            path: 'skills/source_files/zip456/README.md',
+          },
+        }),
+      );
     });
 
     it('should handle empty resources', async () => {
@@ -161,20 +203,20 @@ describe('SkillResourceService', () => {
   });
 
   describe('readResource', () => {
-    it('should read resource content', async () => {
+    it('should read resource content by SkillResourceMeta', async () => {
       const service = new SkillResourceService({} as any, 'user-1');
-      const resourceIds = { 'test.txt': 'file-id-1' };
+      const resources = { 'test.txt': { fileHash: 'abc123fileHash' } };
 
-      const content = await service.readResource(resourceIds, 'test.txt');
+      const content = await service.readResource(resources, 'test.txt');
 
       expect(content).toBe('file content');
     });
 
     it('should throw error for non-existent path', async () => {
       const service = new SkillResourceService({} as any, 'user-1');
-      const resourceIds = { 'test.txt': 'file-id-1' };
+      const resources = { 'test.txt': { fileHash: 'abc123fileHash' } };
 
-      await expect(service.readResource(resourceIds, 'non-existent.txt')).rejects.toThrow(
+      await expect(service.readResource(resources, 'non-existent.txt')).rejects.toThrow(
         'Resource not found: non-existent.txt',
       );
     });

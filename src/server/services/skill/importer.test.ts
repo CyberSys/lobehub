@@ -43,7 +43,7 @@ vi.mock('@/server/services/file/impls', () => ({
     createPreSignedUrlForPreview: vi.fn().mockResolvedValue('mock-preview-url'),
     deleteFile: vi.fn().mockResolvedValue(undefined),
     deleteFiles: vi.fn().mockResolvedValue(undefined),
-    getFileByteArray: vi.fn().mockResolvedValue(new Uint8Array()),
+    getFileByteArray: vi.fn().mockResolvedValue(new Uint8Array([1, 2, 3, 4])), // Non-empty content
     getFileContent: vi.fn().mockResolvedValue('mock-content'),
     getFileMetadata: vi.fn().mockResolvedValue({ contentLength: 100 }),
     getFullFileUrl: vi.fn().mockResolvedValue('mock-full-url'),
@@ -330,9 +330,10 @@ describe('SkillImporter', () => {
       expect(result).toBeDefined();
       expect(result.identifier).toBe('github.openclaw.openclaw.skills.skill-creator');
 
-      // Verify parseZipPackage was called with basePath
+      // Verify parseZipPackage was called with basePath and repackSkillZip
       expect(mockParserInstance.parseZipPackage).toHaveBeenCalledWith(expect.any(Buffer), {
         basePath: 'skills/skill-creator',
+        repackSkillZip: true,
       });
     });
 
@@ -535,6 +536,258 @@ describe('SkillImporter', () => {
         expect.any(Buffer),
         'application/zip',
       );
+    });
+
+    it('should call parseZipPackage with repackSkillZip: true', async () => {
+      mockGitHubInstance.parseRepoUrl.mockReturnValue({
+        branch: 'main',
+        owner: 'lobehub',
+        repo: 'repack-test',
+      });
+      mockGitHubInstance.downloadRepoZip.mockResolvedValue(Buffer.from('large-repo-zip'));
+      mockParserInstance.parseZipPackage.mockResolvedValue({
+        content: '# Skill',
+        manifest: { name: 'Test', description: 'Test' },
+        resources: new Map(),
+        skillZipBuffer: Buffer.from('small-skill-zip'),
+        zipHash: 'skill-hash',
+      });
+
+      await importer.importFromGitHub({
+        gitUrl: 'https://github.com/lobehub/repack-test',
+      });
+
+      // Verify parseZipPackage was called with repackSkillZip: true
+      expect(mockParserInstance.parseZipPackage).toHaveBeenCalledWith(
+        expect.any(Buffer),
+        expect.objectContaining({ repackSkillZip: true }),
+      );
+    });
+
+    it('should upload skillZipBuffer instead of full repo ZIP', async () => {
+      const { createFileServiceModule } = await import('@/server/services/file/impls');
+      const mockUploadBuffer = vi.fn().mockResolvedValue({ key: 'mock-key' });
+      (createFileServiceModule as any).mockReturnValue({
+        createPreSignedUrl: vi.fn(),
+        createPreSignedUrlForPreview: vi.fn(),
+        deleteFile: vi.fn(),
+        deleteFiles: vi.fn(),
+        getFileByteArray: vi.fn(),
+        getFileContent: vi.fn(),
+        getFileMetadata: vi.fn(),
+        getFullFileUrl: vi.fn(),
+        getKeyFromFullUrl: vi.fn(),
+        uploadBuffer: mockUploadBuffer,
+        uploadContent: vi.fn(),
+        uploadMedia: vi.fn(),
+      });
+
+      const freshImporter = new SkillImporter(db, userId);
+      const largeRepoZip = Buffer.alloc(10_000_000); // 10MB repo ZIP
+      const smallSkillZip = Buffer.from('small-repacked-skill-zip');
+
+      mockGitHubInstance.parseRepoUrl.mockReturnValue({
+        branch: 'main',
+        owner: 'lobehub',
+        repo: 'large-repo',
+      });
+      mockGitHubInstance.downloadRepoZip.mockResolvedValue(largeRepoZip);
+      mockParserInstance.parseZipPackage.mockResolvedValue({
+        content: '# Skill',
+        manifest: { name: 'Test', description: 'Test' },
+        resources: new Map(),
+        skillZipBuffer: smallSkillZip,
+        zipHash: 'skill-content-hash',
+      });
+
+      await freshImporter.importFromGitHub({
+        gitUrl: 'https://github.com/lobehub/large-repo',
+      });
+
+      // Verify uploadBuffer was called with skillZipBuffer, not the large repo ZIP
+      expect(mockUploadBuffer).toHaveBeenCalledWith(
+        expect.stringContaining('skills/zip/'),
+        smallSkillZip, // Should be the small repacked ZIP
+        'application/zip',
+      );
+    });
+
+    it('should skip import when skill exists with same zipHash (deduplication)', async () => {
+      const zipHash = `dedup-hash-${Date.now()}`;
+
+      mockGitHubInstance.parseRepoUrl.mockReturnValue({
+        branch: 'main',
+        owner: 'lobehub',
+        repo: 'skill-dedup',
+      });
+      mockGitHubInstance.downloadRepoZip.mockResolvedValue(Buffer.from('mock-zip'));
+      mockParserInstance.parseZipPackage.mockResolvedValue({
+        content: '# Skill Content',
+        manifest: { name: 'Dedup Skill', description: 'Test deduplication' },
+        resources: new Map([
+          ['readme.md', Buffer.from('# README')],
+          ['docs/guide.md', Buffer.from('# Guide')],
+        ]),
+        zipHash,
+      });
+
+      // First import
+      const first = await importer.importFromGitHub({
+        gitUrl: 'https://github.com/lobehub/skill-dedup',
+      });
+
+      expect(first).toBeDefined();
+      expect(first.zipFileHash).toBe(zipHash);
+
+      // Record how many times parseZipPackage was called
+      const parseCallCountAfterFirst = mockParserInstance.parseZipPackage.mock.calls.length;
+
+      // Second import with same zipHash should skip
+      const second = await importer.importFromGitHub({
+        gitUrl: 'https://github.com/lobehub/skill-dedup',
+      });
+
+      // Should return the existing skill
+      expect(second.id).toBe(first.id);
+      expect(second.zipFileHash).toBe(zipHash);
+
+      // parseZipPackage should be called again (to get the new hash)
+      // but we should verify no resource storage happened
+      expect(mockParserInstance.parseZipPackage.mock.calls.length).toBe(
+        parseCallCountAfterFirst + 1,
+      );
+
+      // Verify only one skill exists in database
+      const dbSkills = await db
+        .select()
+        .from(agentSkills)
+        .where(eq(agentSkills.identifier, 'github.lobehub.skill-dedup'));
+      expect(dbSkills).toHaveLength(1);
+    });
+
+    it('should update skill when content changes (different zipHash)', async () => {
+      const { createFileServiceModule } = await import('@/server/services/file/impls');
+      const mockUploadBuffer = vi.fn().mockResolvedValue({ key: 'mock-key' });
+      (createFileServiceModule as any).mockReturnValue({
+        createPreSignedUrl: vi.fn(),
+        createPreSignedUrlForPreview: vi.fn(),
+        deleteFile: vi.fn(),
+        deleteFiles: vi.fn(),
+        getFileByteArray: vi.fn(),
+        getFileContent: vi.fn(),
+        getFileMetadata: vi.fn(),
+        getFullFileUrl: vi.fn(),
+        getKeyFromFullUrl: vi.fn(),
+        uploadBuffer: mockUploadBuffer,
+        uploadContent: vi.fn(),
+        uploadMedia: vi.fn(),
+      });
+
+      const freshImporter = new SkillImporter(db, userId);
+
+      mockGitHubInstance.parseRepoUrl.mockReturnValue({
+        branch: 'main',
+        owner: 'lobehub',
+        repo: 'skill-update-content',
+      });
+      mockGitHubInstance.downloadRepoZip.mockResolvedValue(Buffer.from('mock-zip'));
+
+      // First import
+      mockParserInstance.parseZipPackage.mockResolvedValueOnce({
+        content: '# Original Content',
+        manifest: { name: 'Update Skill', description: 'Version 1' },
+        resources: new Map(),
+        zipHash: 'hash-v1',
+      });
+
+      const first = await freshImporter.importFromGitHub({
+        gitUrl: 'https://github.com/lobehub/skill-update-content',
+      });
+
+      expect(first.content).toBe('# Original Content');
+      expect(first.zipFileHash).toBe('hash-v1');
+      const uploadCountAfterFirst = mockUploadBuffer.mock.calls.length;
+
+      // Second import with different zipHash (content changed)
+      mockParserInstance.parseZipPackage.mockResolvedValueOnce({
+        content: '# Updated Content',
+        manifest: { name: 'Update Skill', description: 'Version 2' },
+        resources: new Map(),
+        zipHash: 'hash-v2',
+      });
+
+      const second = await freshImporter.importFromGitHub({
+        gitUrl: 'https://github.com/lobehub/skill-update-content',
+      });
+
+      // Should update the existing skill
+      expect(second.id).toBe(first.id);
+      expect(second.content).toBe('# Updated Content');
+      expect(second.zipFileHash).toBe('hash-v2');
+
+      // uploadBuffer should be called again for the new ZIP
+      expect(mockUploadBuffer.mock.calls.length).toBe(uploadCountAfterFirst + 1);
+    });
+  });
+
+  describe('importFromZip without repacking', () => {
+    it('should NOT pass repackSkillZip option for user uploaded ZIP', async () => {
+      // Reset the mock to ensure it returns non-empty content (previous tests may have overwritten it)
+      const { createFileServiceModule } = await import('@/server/services/file/impls');
+      (createFileServiceModule as any).mockReturnValue({
+        createPreSignedUrl: vi.fn().mockResolvedValue('mock-presigned-url'),
+        createPreSignedUrlForPreview: vi.fn().mockResolvedValue('mock-preview-url'),
+        deleteFile: vi.fn().mockResolvedValue(undefined),
+        deleteFiles: vi.fn().mockResolvedValue(undefined),
+        getFileByteArray: vi.fn().mockResolvedValue(new Uint8Array([1, 2, 3, 4])),
+        getFileContent: vi.fn().mockResolvedValue('mock-content'),
+        getFileMetadata: vi.fn().mockResolvedValue({ contentLength: 100 }),
+        getFullFileUrl: vi.fn().mockResolvedValue('mock-full-url'),
+        getKeyFromFullUrl: vi.fn().mockResolvedValue(null),
+        uploadBuffer: vi.fn().mockResolvedValue({ key: 'mock-key' }),
+        uploadContent: vi.fn().mockResolvedValue(undefined),
+        uploadMedia: vi.fn().mockResolvedValue({ key: 'mock-key' }),
+      });
+
+      // Create a fresh importer instance to pick up the reset mock
+      const freshImporter = new SkillImporter(db, userId);
+
+      const zipFileId = `zip-no-repack-${Date.now()}`;
+      const zipHash = `hash-no-repack-${Date.now()}`;
+
+      await db.insert(globalFiles).values({
+        creator: userId,
+        fileType: 'application/zip',
+        hashId: zipHash,
+        size: 1000,
+        url: 'mock/path/skill.zip',
+      });
+
+      await db.insert(files).values({
+        fileHash: zipHash,
+        fileType: 'application/zip',
+        id: zipFileId,
+        name: 'skill.zip',
+        size: 1000,
+        url: 'mock/path/skill.zip',
+        userId,
+      });
+
+      mockParserInstance.parseZipPackage.mockResolvedValue({
+        content: '# User Skill',
+        manifest: { name: 'User Skill', description: 'User uploaded' },
+        resources: new Map(),
+        zipHash: undefined, // User uploaded ZIP doesn't need to track hash for foreign key
+      });
+
+      await freshImporter.importFromZip({ zipFileId });
+
+      // Verify parseZipPackage was called WITHOUT repackSkillZip option
+      expect(mockParserInstance.parseZipPackage).toHaveBeenCalledTimes(1);
+      const callArgs = mockParserInstance.parseZipPackage.mock.calls[0];
+      expect(callArgs[0]).toBeInstanceOf(Buffer);
+      // Second argument should be undefined (no options passed)
+      expect(callArgs[1]).toBeUndefined();
     });
   });
 

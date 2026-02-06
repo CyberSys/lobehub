@@ -170,6 +170,53 @@ export class FileService {
   }
 
   /**
+   * Create global file record only (no user file record)
+   * Used for skill resources that should not appear in user's file list
+   *
+   * @param params - File parameters
+   * @returns fileHash for reference
+   */
+  public async createGlobalFile(params: {
+    fileHash: string;
+    fileType: string;
+    metadata?: { dirname: string; filename: string; path: string };
+    size: number;
+    url: string;
+  }): Promise<{ fileHash: string }> {
+    // Check if hash already exists
+    const { isExist } = await this.fileModel.checkHash(params.fileHash);
+
+    // Only create if not exists
+    if (!isExist) {
+      await this.fileModel.createGlobalFile({
+        creator: this.userId,
+        fileType: params.fileType,
+        hashId: params.fileHash,
+        metadata: params.metadata,
+        size: params.size,
+        url: params.url,
+      });
+    }
+
+    return { fileHash: params.fileHash };
+  }
+
+  /**
+   * Get file content by hash from globalFiles
+   * Used for reading skill resources stored in globalFiles only
+   *
+   * @param fileHash - File hash (globalFiles.hashId)
+   * @returns File content as string
+   */
+  public async getFileContentByHash(fileHash: string): Promise<string> {
+    const result = await this.fileModel.checkHash(fileHash);
+    if (!result.isExist || !result.url) {
+      throw new TRPCError({ code: 'NOT_FOUND', message: `Global file not found: ${fileHash}` });
+    }
+    return this.getFileContent(result.url);
+  }
+
+  /**
    * Upload base64 data and create database record
    * @param base64Data - Base64 data (supports data URI format or pure base64)
    * @param pathname - File storage path (must include file extension)
