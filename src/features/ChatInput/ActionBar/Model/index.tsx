@@ -1,9 +1,7 @@
 import { ModelIcon } from '@lobehub/icons';
 import { Center, Flexbox } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
-import { Settings2Icon } from 'lucide-react';
-import { memo, useCallback } from 'react';
-import { useTranslation } from 'react-i18next';
+import { type ReactNode, memo, useCallback } from 'react';
 
 import ModelSwitchPanel from '@/features/ModelSwitchPanel';
 import { useAgentStore } from '@/store/agent';
@@ -11,14 +9,14 @@ import { agentByIdSelectors } from '@/store/agent/selectors';
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 
 import { useAgentId } from '../../hooks/useAgentId';
-import Action from '../components/Action';
 import { useActionBarContext } from '../context';
 import ControlsForm from './ControlsForm';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    border-radius: 24px;
-    background: ${cssVar.colorFillTertiary};
+  extraControls: css`
+    padding-block: 8px;
+    padding-inline: 12px;
+    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
   icon: cx(
     'model-switch',
@@ -40,22 +38,25 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       }
     }
   `,
-  modelWithControl: css`
-    border-radius: 24px;
-
-    :hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-
-  video: css`
-    overflow: hidden;
-    border-radius: 24px;
-  `,
 }));
 
+const ControlsSection = memo<{ model: string; provider: string }>(({ model, provider }) => {
+  const isModelHasExtendParams = useAiInfraStore(
+    aiModelSelectors.isModelHasExtendParams(model, provider),
+  );
+
+  if (!isModelHasExtendParams) return null;
+
+  return (
+    <Flexbox className={styles.extraControls}>
+      <ControlsForm model={model} provider={provider} />
+    </Flexbox>
+  );
+});
+
+ControlsSection.displayName = 'ControlsSection';
+
 const ModelSwitch = memo(() => {
-  const { t } = useTranslation('chat');
   const { dropdownPlacement } = useActionBarContext();
 
   const agentId = useAgentId();
@@ -65,10 +66,6 @@ const ModelSwitch = memo(() => {
     s.updateAgentConfigById,
   ]);
 
-  const isModelHasExtendParams = useAiInfraStore(
-    aiModelSelectors.isModelHasExtendParams(model, provider),
-  );
-
   const handleModelChange = useCallback(
     async (params: { model: string; provider: string }) => {
       await updateAgentConfigById(agentId, params);
@@ -76,39 +73,24 @@ const ModelSwitch = memo(() => {
     [agentId, updateAgentConfigById],
   );
 
-  return (
-    <Flexbox horizontal align={'center'} className={isModelHasExtendParams ? styles.container : ''}>
-      <ModelSwitchPanel
-        model={model}
-        placement={dropdownPlacement}
-        provider={provider}
-        onModelChange={handleModelChange}
-      >
-        <Center
-          className={cx(styles.model, isModelHasExtendParams && styles.modelWithControl)}
-          height={36}
-          width={36}
-        >
-          <div className={styles.icon}>
-            <ModelIcon model={model} size={22} />
-          </div>
-        </Center>
-      </ModelSwitchPanel>
+  const renderControls = useCallback((modelId: string, providerId: string): ReactNode => {
+    return <ControlsSection model={modelId} provider={providerId} />;
+  }, []);
 
-      {isModelHasExtendParams && (
-        <Action
-          icon={Settings2Icon}
-          showTooltip={false}
-          style={{ borderRadius: 24, marginInlineStart: -4 }}
-          title={t('extendParams.title')}
-          popover={{
-            content: <ControlsForm />,
-            minWidth: 350,
-            placement: 'topLeft',
-          }}
-        />
-      )}
-    </Flexbox>
+  return (
+    <ModelSwitchPanel
+      extraControls={renderControls}
+      model={model}
+      onModelChange={handleModelChange}
+      placement={dropdownPlacement}
+      provider={provider}
+    >
+      <Center className={styles.model} height={36} width={36}>
+        <div className={styles.icon}>
+          <ModelIcon model={model} size={22} />
+        </div>
+      </Center>
+    </ModelSwitchPanel>
   );
 });
 

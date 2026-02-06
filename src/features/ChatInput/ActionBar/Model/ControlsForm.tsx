@@ -26,14 +26,21 @@ import ThinkingLevel2Slider from './ThinkingLevel2Slider';
 import ThinkingLevelSlider from './ThinkingLevelSlider';
 import ThinkingSlider from './ThinkingSlider';
 
-const ControlsForm = memo(() => {
+interface ControlsFormProps {
+  model?: string;
+  provider?: string;
+}
+
+const ControlsForm = memo<ControlsFormProps>(({ model: modelProp, provider: providerProp }) => {
   const { t } = useTranslation('chat');
   const agentId = useAgentId();
   const { updateAgentChatConfig } = useUpdateAgentConfig();
-  const [model, provider] = useAgentStore((s) => [
+  const [agentModel, agentProvider] = useAgentStore((s) => [
     agentByIdSelectors.getAgentModelById(agentId)(s),
     agentByIdSelectors.getAgentModelProviderById(agentId)(s),
   ]);
+  const model = modelProp ?? agentModel;
+  const provider = providerProp ?? agentProvider;
   const [form] = Form.useForm();
   const enableReasoning = AntdForm.useWatch(['enableReasoning'], form);
 

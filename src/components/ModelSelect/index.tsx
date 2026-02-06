@@ -57,6 +57,7 @@ type TooltipStyles = typeof styles;
 interface ModelInfoTagsProps extends ModelAbilities {
   contextWindowTokens?: number | null;
   directionReverse?: boolean;
+  disableTooltip?: boolean;
   isCustom?: boolean;
   placement?: 'top' | 'right';
   style?: CSSProperties;
@@ -66,6 +67,7 @@ interface FeatureTagsProps extends Pick<
   ModelAbilities,
   'files' | 'imageOutput' | 'vision' | 'video' | 'functionCall' | 'reasoning' | 'search'
 > {
+  disableTooltip?: boolean;
   placement: 'top' | 'right';
   tagClassName: string;
 }
@@ -73,6 +75,7 @@ interface FeatureTagsProps extends Pick<
 interface FeatureTagItemProps {
   className: string;
   color: Parameters<typeof Tag>[0]['color'];
+  disableTooltip?: boolean;
   enabled: boolean | undefined;
   icon: Parameters<typeof Icon>[0]['icon'];
   placement: 'top' | 'right';
@@ -80,7 +83,7 @@ interface FeatureTagItemProps {
 }
 
 const FeatureTagItem = memo<FeatureTagItemProps>(
-  ({ className, color, enabled, icon, placement, title }) => {
+  ({ className, color, disableTooltip, enabled, icon, placement, title }) => {
     if (!enabled) return null;
 
     const tag = (
@@ -88,6 +91,8 @@ const FeatureTagItem = memo<FeatureTagItemProps>(
         <Icon icon={icon} />
       </Tag>
     );
+
+    if (disableTooltip) return tag;
 
     return (
       <Tooltip placement={placement} title={title}>
@@ -99,6 +104,7 @@ const FeatureTagItem = memo<FeatureTagItemProps>(
 
 const FeatureTags = memo<FeatureTagsProps>(
   ({
+    disableTooltip,
     files,
     functionCall,
     imageOutput,
@@ -116,6 +122,7 @@ const FeatureTags = memo<FeatureTagsProps>(
         <FeatureTagItem
           className={tagClassName}
           color={'success'}
+          disableTooltip={disableTooltip}
           enabled={files}
           icon={LucidePaperclip}
           placement={placement}
@@ -124,6 +131,7 @@ const FeatureTags = memo<FeatureTagsProps>(
         <FeatureTagItem
           className={tagClassName}
           color={'success'}
+          disableTooltip={disableTooltip}
           enabled={imageOutput}
           icon={LucideImage}
           placement={placement}
@@ -132,6 +140,7 @@ const FeatureTags = memo<FeatureTagsProps>(
         <FeatureTagItem
           className={tagClassName}
           color={'success'}
+          disableTooltip={disableTooltip}
           enabled={vision}
           icon={LucideEye}
           placement={placement}
@@ -140,6 +149,7 @@ const FeatureTags = memo<FeatureTagsProps>(
         <FeatureTagItem
           className={tagClassName}
           color={'magenta'}
+          disableTooltip={disableTooltip}
           enabled={video}
           icon={Video}
           placement={placement}
@@ -148,6 +158,7 @@ const FeatureTags = memo<FeatureTagsProps>(
         <FeatureTagItem
           className={tagClassName}
           color={'info'}
+          disableTooltip={disableTooltip}
           enabled={functionCall}
           icon={ToyBrick}
           placement={placement}
@@ -156,6 +167,7 @@ const FeatureTags = memo<FeatureTagsProps>(
         <FeatureTagItem
           className={tagClassName}
           color={'purple'}
+          disableTooltip={disableTooltip}
           enabled={reasoning}
           icon={AtomIcon}
           placement={placement}
@@ -164,6 +176,7 @@ const FeatureTags = memo<FeatureTagsProps>(
         <FeatureTagItem
           className={tagClassName}
           color={'cyan'}
+          disableTooltip={disableTooltip}
           enabled={search}
           icon={LucideGlobe}
           placement={placement}
@@ -177,10 +190,12 @@ const FeatureTags = memo<FeatureTagsProps>(
 const Context = memo(
   ({
     contextWindowTokens,
+    disableTooltip,
     placement,
     styles,
   }: {
     contextWindowTokens: number;
+    disableTooltip?: boolean;
     placement: 'top' | 'right';
     styles: TooltipStyles;
   }) => {
@@ -193,10 +208,11 @@ const Context = memo(
       </Tag>
     );
 
+    if (disableTooltip) return tag;
+
     return (
       <Tooltip
         placement={placement}
-        // styles={styles}
         title={t('ModelSelect.featureTag.tokens', {
           tokens: contextWindowTokens === 0 ? '∞' : numeral(contextWindowTokens).format('0,0'),
         })}
@@ -208,7 +224,7 @@ const Context = memo(
 );
 
 export const ModelInfoTags = memo<ModelInfoTagsProps>(
-  ({ directionReverse, placement = 'top', style, ...model }) => {
+  ({ directionReverse, disableTooltip, placement = 'top', style, ...model }) => {
     return (
       <Flexbox
         className={TAG_CLASSNAME}
@@ -218,6 +234,7 @@ export const ModelInfoTags = memo<ModelInfoTagsProps>(
         width={'fit-content'}
       >
         <FeatureTags
+          disableTooltip={disableTooltip}
           files={model.files}
           functionCall={model.functionCall}
           imageOutput={model.imageOutput}
@@ -231,6 +248,7 @@ export const ModelInfoTags = memo<ModelInfoTagsProps>(
         {typeof model.contextWindowTokens === 'number' && (
           <Context
             contextWindowTokens={model.contextWindowTokens}
+            disableTooltip={disableTooltip}
             placement={placement}
             styles={styles}
           />
