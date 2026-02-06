@@ -70,6 +70,15 @@ export class AgentSkillModel {
     return result;
   };
 
+  findByName = async (name: string): Promise<SkillItem | undefined> => {
+    const [result] = await this.db
+      .select(skillItemColumns)
+      .from(agentSkills)
+      .where(and(eq(agentSkills.name, name), eq(agentSkills.userId, this.userId)))
+      .limit(1);
+    return result;
+  };
+
   findAll = async (): Promise<SkillListItem[]> => {
     return this.db
       .select(skillListColumns)

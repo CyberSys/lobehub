@@ -91,6 +91,7 @@ describe('Skill Router Integration Tests', () => {
       const result = await caller.create({
         name: 'Custom ID Skill',
         content: '# Custom',
+        description: 'Custom identifier skill',
         identifier: 'custom.skill.id',
       });
 
@@ -103,6 +104,7 @@ describe('Skill Router Integration Tests', () => {
       await caller.create({
         name: 'First Skill',
         content: '# First',
+        description: 'First skill',
         identifier: 'duplicate.id',
       });
 
@@ -110,6 +112,7 @@ describe('Skill Router Integration Tests', () => {
         caller.create({
           name: 'Second Skill',
           content: '# Second',
+          description: 'Second skill',
           identifier: 'duplicate.id',
         }),
       ).rejects.toThrow();
@@ -120,8 +123,8 @@ describe('Skill Router Integration Tests', () => {
     it('should list all skills for user', async () => {
       const caller = agentSkillsRouter.createCaller(createTestContext(userId));
 
-      await caller.create({ name: 'Skill 1', content: '# Skill 1' });
-      await caller.create({ name: 'Skill 2', content: '# Skill 2' });
+      await caller.create({ name: 'Skill 1', content: '# Skill 1', description: 'Skill 1 desc' });
+      await caller.create({ name: 'Skill 2', content: '# Skill 2', description: 'Skill 2 desc' });
 
       const result = await caller.list();
 
@@ -133,6 +136,7 @@ describe('Skill Router Integration Tests', () => {
       await serverDB.insert(agentSkills).values([
         {
           name: 'User Skill',
+          description: 'User skill description',
           identifier: 'user.skill',
           source: 'user',
           manifest: { name: 'User Skill', description: 'User skill description' },
@@ -140,6 +144,7 @@ describe('Skill Router Integration Tests', () => {
         },
         {
           name: 'Market Skill',
+          description: 'Market skill description',
           identifier: 'market.skill',
           source: 'market',
           manifest: { name: 'Market Skill', description: 'Market skill description' },
@@ -166,6 +171,7 @@ describe('Skill Router Integration Tests', () => {
       const created = await caller.create({
         name: 'Get By ID Skill',
         content: '# Get By ID',
+        description: 'Get by ID skill',
       });
 
       const result = await caller.getById({ id: created.id });
@@ -191,6 +197,7 @@ describe('Skill Router Integration Tests', () => {
       await caller.create({
         name: 'By Identifier',
         content: '# By Identifier',
+        description: 'By identifier skill',
         identifier: 'test.by.identifier',
       });
 
@@ -205,8 +212,8 @@ describe('Skill Router Integration Tests', () => {
     it('should search skills by name', async () => {
       const caller = agentSkillsRouter.createCaller(createTestContext(userId));
 
-      await caller.create({ name: 'TypeScript Expert', content: '# TS' });
-      await caller.create({ name: 'Python Master', content: '# Py' });
+      await caller.create({ name: 'TypeScript Expert', content: '# TS', description: 'TS expert' });
+      await caller.create({ name: 'Python Master', content: '# Py', description: 'Py master' });
 
       const result = await caller.search({ query: 'TypeScript' });
 
@@ -250,6 +257,7 @@ describe('Skill Router Integration Tests', () => {
       const created = await caller.create({
         name: 'Original Name',
         content: '# Original',
+        description: 'Original description',
       });
 
       await caller.update({
@@ -270,6 +278,7 @@ describe('Skill Router Integration Tests', () => {
       const created = await caller.create({
         name: 'Manifest Test',
         content: '# Test',
+        description: 'Manifest test skill',
       });
 
       await caller.update({
@@ -296,6 +305,7 @@ describe('Skill Router Integration Tests', () => {
       const created = await caller.create({
         name: 'To Delete',
         content: '# Delete Me',
+        description: 'To delete skill',
       });
 
       await caller.delete({ id: created.id });
@@ -308,8 +318,16 @@ describe('Skill Router Integration Tests', () => {
     it('should not affect other skills when deleting', async () => {
       const caller = agentSkillsRouter.createCaller(createTestContext(userId));
 
-      const skill1 = await caller.create({ name: 'Skill 1', content: '# 1' });
-      const skill2 = await caller.create({ name: 'Skill 2', content: '# 2' });
+      const skill1 = await caller.create({
+        name: 'Skill 1',
+        content: '# 1',
+        description: 'Skill 1',
+      });
+      const skill2 = await caller.create({
+        name: 'Skill 2',
+        content: '# 2',
+        description: 'Skill 2',
+      });
 
       await caller.delete({ id: skill1.id });
 
@@ -327,6 +345,7 @@ describe('Skill Router Integration Tests', () => {
       const created = await caller.create({
         name: 'No Resources',
         content: '# No Resources',
+        description: 'Skill without resources',
       });
 
       const result = await caller.listResources({ skillId: created.id });
@@ -359,6 +378,7 @@ describe('Skill Router Integration Tests', () => {
       const created = await caller.create({
         name: 'No Resources',
         content: '# No Resources',
+        description: 'Skill without resources',
       });
 
       // Skill exists but has no resources, triggers BAD_REQUEST with message
@@ -393,10 +413,10 @@ describe('Skill Router Integration Tests', () => {
       });
 
       expect(result).toBeDefined();
-      expect(result.name).toBe('skill-creator');
-      expect(result.identifier).toBe('github.openclaw.openclaw.skills.skill-creator');
-      expect(result.source).toBe('market');
-      expect(result.manifest).toMatchObject({
+      expect(result.skill.name).toBe('skill-creator');
+      expect(result.skill.identifier).toBe('github.openclaw.openclaw.skills.skill-creator');
+      expect(result.skill.source).toBe('market');
+      expect(result.skill.manifest).toMatchObject({
         gitUrl: 'https://github.com/openclaw/openclaw/tree/main/skills/skill-creator',
         repository: 'https://github.com/openclaw/openclaw',
       });
@@ -407,9 +427,10 @@ describe('Skill Router Integration Tests', () => {
         undefined,
       );
 
-      // Verify parseZipPackage was called with basePath
+      // Verify parseZipPackage was called with basePath and repackSkillZip
       expect(mockParserInstance.parseZipPackage).toHaveBeenCalledWith(expect.any(Buffer), {
         basePath: 'skills/skill-creator',
+        repackSkillZip: true,
       });
     });
 
@@ -427,7 +448,10 @@ describe('Skill Router Integration Tests', () => {
         callCount++;
         return {
           content: callCount === 1 ? '# Original' : '# Updated Content',
-          manifest: { name: callCount === 1 ? 'Original Name' : 'Updated Name' },
+          manifest: {
+            name: callCount === 1 ? 'Original Name' : 'Updated Name',
+            description: callCount === 1 ? 'Original desc' : 'Updated desc',
+          },
           resources: new Map(),
           // zipHash undefined to skip globalFiles foreign key
           zipHash: undefined,
@@ -440,16 +464,16 @@ describe('Skill Router Integration Tests', () => {
       const first = await caller.importFromGitHub({
         gitUrl: 'https://github.com/lobehub/skills/tree/main/skills/demo',
       });
-      expect(first.name).toBe('Original Name');
-      expect(first.content).toBe('# Original');
+      expect(first.skill.name).toBe('Original Name');
+      expect(first.skill.content).toBe('# Original');
 
       // Re-import (should update)
       const second = await caller.importFromGitHub({
         gitUrl: 'https://github.com/lobehub/skills/tree/main/skills/demo',
       });
-      expect(second.id).toBe(first.id); // Same skill updated
-      expect(second.name).toBe('Updated Name');
-      expect(second.content).toBe('# Updated Content');
+      expect(second.skill.id).toBe(first.skill.id); // Same skill updated
+      expect(second.skill.name).toBe('Updated Name');
+      expect(second.skill.content).toBe('# Updated Content');
     });
   });
 
@@ -457,7 +481,11 @@ describe('Skill Router Integration Tests', () => {
     it('should not access skills from other users', async () => {
       // Create skill for original user
       const caller1 = agentSkillsRouter.createCaller(createTestContext(userId));
-      await caller1.create({ name: 'User 1 Skill', content: '# User 1' });
+      await caller1.create({
+        name: 'User 1 Skill',
+        content: '# User 1',
+        description: 'User 1 skill',
+      });
 
       // Create another user
       const otherUserId = await createTestUser(serverDB);
@@ -473,7 +501,11 @@ describe('Skill Router Integration Tests', () => {
 
     it('should not update skills from other users', async () => {
       const caller1 = agentSkillsRouter.createCaller(createTestContext(userId));
-      const created = await caller1.create({ name: 'Original', content: '# Original' });
+      const created = await caller1.create({
+        name: 'Original',
+        content: '# Original',
+        description: 'Original skill',
+      });
 
       // Create another user
       const otherUserId = await createTestUser(serverDB);
@@ -491,7 +523,11 @@ describe('Skill Router Integration Tests', () => {
 
     it('should not delete skills from other users', async () => {
       const caller1 = agentSkillsRouter.createCaller(createTestContext(userId));
-      const created = await caller1.create({ name: 'Protected', content: '# Protected' });
+      const created = await caller1.create({
+        name: 'Protected',
+        content: '# Protected',
+        description: 'Protected skill',
+      });
 
       // Create another user
       const otherUserId = await createTestUser(serverDB);

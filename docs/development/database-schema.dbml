@@ -105,7 +105,7 @@ table agent_cron_jobs {
 table agent_skills {
   id text [pk, not null]
   name text [not null]
-  description text
+  description text [not null]
   identifier text [not null]
   source text [not null]
   manifest jsonb [not null, default: `{}`]
@@ -119,6 +119,7 @@ table agent_skills {
   updated_at "timestamp with time zone" [not null, default: `now()`]
 
   indexes {
+    (user_id, name) [name: 'agent_skills_user_name_idx', unique]
     identifier [name: 'agent_skills_identifier_idx']
     user_id [name: 'agent_skills_user_id_idx']
     source [name: 'agent_skills_source_idx']

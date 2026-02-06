@@ -1,7 +1,7 @@
 /* eslint-disable sort-keys-fix/sort-keys-fix  */
 import { SkillManifest, SkillResourceMeta } from '@lobechat/types';
 import { relations } from 'drizzle-orm';
-import { index, jsonb, pgTable, text, varchar } from 'drizzle-orm/pg-core';
+import { index, jsonb, pgTable, text, uniqueIndex, varchar } from 'drizzle-orm/pg-core';
 
 import { idGenerator } from '../utils/idGenerator';
 import { timestamps } from './_helpers';
@@ -17,7 +17,7 @@ export const agentSkills = pgTable(
 
     // 核心标识
     name: text('name').notNull(),
-    description: text('description'),
+    description: text('description').notNull(),
     identifier: text('identifier').notNull(),
 
     // 来源控制
@@ -49,6 +49,7 @@ export const agentSkills = pgTable(
     ...timestamps,
   },
   (t) => [
+    uniqueIndex('agent_skills_user_name_idx').on(t.userId, t.name),
     index('agent_skills_identifier_idx').on(t.identifier),
     index('agent_skills_user_id_idx').on(t.userId),
     index('agent_skills_source_idx').on(t.source),

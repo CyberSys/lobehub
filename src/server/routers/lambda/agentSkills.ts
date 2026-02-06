@@ -25,7 +25,7 @@ const skillProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
 
 const createSkillSchema = z.object({
   content: z.string(),
-  description: z.string().optional(),
+  description: z.string().min(1),
   identifier: z.string().optional(),
   name: z.string().min(1),
 });

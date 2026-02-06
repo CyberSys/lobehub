@@ -54,6 +54,7 @@ describe('AgentSkillModel', () => {
         .insert(agentSkills)
         .values({
           name: 'To Delete',
+          description: 'To delete skill',
           identifier: 'to.delete',
           source: 'user',
           manifest: createManifest(),
@@ -77,6 +78,7 @@ describe('AgentSkillModel', () => {
         .insert(agentSkills)
         .values({
           name: 'Find Me',
+          description: 'Find me skill',
           identifier: 'find.me',
           source: 'user',
           manifest: createManifest(),
@@ -100,6 +102,7 @@ describe('AgentSkillModel', () => {
     it('should find an agent skill by identifier', async () => {
       await serverDB.insert(agentSkills).values({
         name: 'By Identifier',
+        description: 'By identifier skill',
         identifier: 'by.identifier',
         source: 'user',
         manifest: createManifest(),
@@ -117,6 +120,7 @@ describe('AgentSkillModel', () => {
       await serverDB.insert(agentSkills).values([
         {
           name: 'Skill 1',
+          description: 'Skill 1 description',
           identifier: 'skill.1',
           source: 'user',
           manifest: createManifest(),
@@ -124,6 +128,7 @@ describe('AgentSkillModel', () => {
         },
         {
           name: 'Skill 2',
+          description: 'Skill 2 description',
           identifier: 'skill.2',
           source: 'market',
           manifest: createManifest(),
@@ -143,6 +148,7 @@ describe('AgentSkillModel', () => {
         .values([
           {
             name: 'Skill A',
+            description: 'Skill A description',
             identifier: 'skill.a',
             source: 'user',
             manifest: createManifest(),
@@ -150,6 +156,7 @@ describe('AgentSkillModel', () => {
           },
           {
             name: 'Skill B',
+            description: 'Skill B description',
             identifier: 'skill.b',
             source: 'user',
             manifest: createManifest(),
@@ -157,6 +164,7 @@ describe('AgentSkillModel', () => {
           },
           {
             name: 'Skill C',
+            description: 'Skill C description',
             identifier: 'skill.c',
             source: 'user',
             manifest: createManifest(),
@@ -183,6 +191,7 @@ describe('AgentSkillModel', () => {
         .insert(agentSkills)
         .values({
           name: 'Original Name',
+          description: 'Original description',
           identifier: 'original',
           source: 'user',
           manifest: createManifest(),
@@ -205,6 +214,7 @@ describe('AgentSkillModel', () => {
       await serverDB.insert(agentSkills).values([
         {
           name: 'User Skill',
+          description: 'User skill description',
           identifier: 'user.skill',
           source: 'user',
           manifest: createManifest(),
@@ -212,6 +222,7 @@ describe('AgentSkillModel', () => {
         },
         {
           name: 'Market Skill',
+          description: 'Market skill description',
           identifier: 'market.skill',
           source: 'market',
           manifest: createManifest(),
@@ -219,6 +230,7 @@ describe('AgentSkillModel', () => {
         },
         {
           name: 'Builtin Skill',
+          description: 'Builtin skill description',
           identifier: 'builtin.skill',
           source: 'builtin',
           manifest: createManifest(),
@@ -240,6 +252,7 @@ describe('AgentSkillModel', () => {
       await serverDB.insert(agentSkills).values([
         {
           name: 'Coding Wizard',
+          description: 'Coding wizard skill',
           identifier: 'coding',
           source: 'user',
           manifest: createManifest(),
@@ -247,6 +260,7 @@ describe('AgentSkillModel', () => {
         },
         {
           name: 'Writing Helper',
+          description: 'Writing helper skill',
           identifier: 'writing',
           source: 'user',
           manifest: createManifest(),

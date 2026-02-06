@@ -110,7 +110,7 @@ export interface SkillListItem {
 
 export interface CreateSkillInput {
   content: string;
-  description?: string;
+  description: string;
   identifier?: string;
   name: string;
 }
@@ -130,4 +130,13 @@ export interface UpdateSkillInput {
   id: string;
   manifest?: Partial<SkillManifest>;
   name?: string;
+}
+
+// ===== Import Result Types =====
+
+export type SkillImportStatus = 'created' | 'updated' | 'unchanged';
+
+export interface SkillImportResult {
+  skill: SkillItem;
+  status: SkillImportStatus;
 }

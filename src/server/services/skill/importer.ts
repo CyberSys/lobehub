@@ -3,8 +3,10 @@ import {
   type CreateSkillInput,
   type ImportGitHubInput,
   type ImportZipInput,
+  type SkillImportResult,
   type SkillManifest,
 } from '@lobechat/types';
+import { nanoid } from '@lobechat/utils';
 import debug from 'debug';
 import { readFile } from 'node:fs/promises';
 
@@ -39,11 +41,17 @@ export class SkillImporter {
    * Create a skill manually by user
    */
   async createUserSkill(input: CreateSkillInput) {
-    const identifier = input.identifier || `user.${this.userId}.${Date.now()}`;
+    // Check if name already exists for this user
+    const existingByName = await this.skillModel.findByName(input.name);
+    if (existingByName) {
+      throw new SkillImportError(`Skill with name "${input.name}" already exists`, 'CONFLICT');
+    }
+
+    const identifier = input.identifier || `user.${nanoid(12)}`;
 
     // Check if identifier already exists
-    const existing = await this.skillModel.findByIdentifier(identifier);
-    if (existing) {
+    const existingByIdentifier = await this.skillModel.findByIdentifier(identifier);
+    if (existingByIdentifier) {
       throw new SkillImportError(
         `Skill with identifier "${identifier}" already exists`,
         'CONFLICT',
@@ -68,8 +76,9 @@ export class SkillImporter {
   /**
    * Import skill from ZIP file
    * @param input - Contains zipFileId from files table
+   * @returns SkillImportResult with status: 'created'
    */
-  async importFromZip(input: ImportZipInput) {
+  async importFromZip(input: ImportZipInput): Promise<SkillImportResult> {
     log('importFromZip: starting with zipFileId=%s', input.zipFileId);
 
     // 1. Download ZIP file to local
@@ -100,7 +109,7 @@ export class SkillImporter {
       log('importFromZip: generated identifier=%s', identifier);
 
       // 5. Create skill record
-      const result = await this.skillModel.create({
+      const skill = await this.skillModel.create({
         content,
         description: manifest.description,
         identifier,
@@ -110,8 +119,8 @@ export class SkillImporter {
         source: 'user',
         zipFileHash: zipHash,
       });
-      log('importFromZip: created skill id=%s', result.id);
-      return result;
+      log('importFromZip: created skill id=%s', skill.id);
+      return { skill, status: 'created' };
     } finally {
       cleanup();
       log('importFromZip: cleaned up temp file');
@@ -121,8 +130,9 @@ export class SkillImporter {
   /**
    * Import skill from GitHub repository
    * @param input - GitHub repository info
+   * @returns SkillImportResult with status: 'created' | 'updated' | 'unchanged'
    */
-  async importFromGitHub(input: ImportGitHubInput) {
+  async importFromGitHub(input: ImportGitHubInput): Promise<SkillImportResult> {
     log('importFromGitHub: starting with gitUrl=%s, branch=%s', input.gitUrl, input.branch);
 
     // 1. Parse GitHub URL
@@ -183,7 +193,7 @@ export class SkillImporter {
         zipHash,
         existing.id,
       );
-      return existing;
+      return { skill: existing, status: 'unchanged' };
     }
 
     // 6. Store resource files (only if skill is new or changed)
@@ -230,7 +240,7 @@ export class SkillImporter {
     // 9. Update existing skill or create new
     if (existing) {
       log('importFromGitHub: skill exists but content changed, updating id=%s', existing.id);
-      const result = await this.skillModel.update(existing.id, {
+      const skill = await this.skillModel.update(existing.id, {
         content,
         description: manifest.description,
         manifest: fullManifest,
@@ -238,13 +248,13 @@ export class SkillImporter {
         resources: resourceIds,
         zipFileHash,
       });
-      log('importFromGitHub: updated skill id=%s', result.id);
-      return result;
+      log('importFromGitHub: updated skill id=%s', skill.id);
+      return { skill, status: 'updated' };
     }
 
     // 10. Create new skill record
     log('importFromGitHub: creating new skill...');
-    const result = await this.skillModel.create({
+    const skill = await this.skillModel.create({
       content,
       description: (manifest as any).description,
       identifier,
@@ -254,7 +264,7 @@ export class SkillImporter {
       source: 'market', // GitHub source marked as market
       zipFileHash,
     });
-    log('importFromGitHub: created skill id=%s', result.id);
-    return result;
+    log('importFromGitHub: created skill id=%s', skill.id);
+    return { skill, status: 'created' };
   }
 }

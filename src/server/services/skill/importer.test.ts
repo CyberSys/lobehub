@@ -109,6 +109,7 @@ describe('SkillImporter', () => {
     it('should create a user skill with custom identifier', async () => {
       const result = await importer.createUserSkill({
         content: '# Test content',
+        description: 'A test skill',
         identifier: 'custom-identifier',
         name: 'Test Skill',
       });
@@ -127,6 +128,7 @@ describe('SkillImporter', () => {
       // Create first skill
       await importer.createUserSkill({
         content: '# First',
+        description: 'First skill',
         identifier: 'duplicate-id',
         name: 'First Skill',
       });
@@ -135,6 +137,7 @@ describe('SkillImporter', () => {
       await expect(
         importer.createUserSkill({
           content: '# Second',
+          description: 'Second skill',
           identifier: 'duplicate-id',
           name: 'Second Skill',
         }),
@@ -143,6 +146,7 @@ describe('SkillImporter', () => {
       try {
         await importer.createUserSkill({
           content: '# Third',
+          description: 'Third skill',
           identifier: 'duplicate-id',
           name: 'Third Skill',
         });
@@ -205,13 +209,14 @@ describe('SkillImporter', () => {
       const result = await importer.importFromZip({ zipFileId });
 
       expect(result).toBeDefined();
-      expect(result.name).toBe('ZIP Skill');
-      expect(result.source).toBe('user');
-      expect(result.identifier).toMatch(/^import\./);
+      expect(result.status).toBe('created');
+      expect(result.skill.name).toBe('ZIP Skill');
+      expect(result.skill.source).toBe('user');
+      expect(result.skill.identifier).toMatch(/^import\./);
 
       // Verify in database
       const dbSkill = await db.query.agentSkills.findFirst({
-        where: eq(agentSkills.id, result.id),
+        where: eq(agentSkills.id, result.skill.id),
       });
       expect(dbSkill).toBeDefined();
       expect(dbSkill?.content).toBe('# ZIP Skill content');
@@ -263,11 +268,12 @@ describe('SkillImporter', () => {
       const result = await importer.importFromZip({ zipFileId });
 
       expect(result).toBeDefined();
-      expect(result.resources).toBeDefined();
+      expect(result.status).toBe('created');
+      expect(result.skill.resources).toBeDefined();
 
       // Verify resources mapping was stored
       const dbSkill = await db.query.agentSkills.findFirst({
-        where: eq(agentSkills.id, result.id),
+        where: eq(agentSkills.id, result.skill.id),
       });
       expect(dbSkill?.resources).toBeDefined();
       expect(Object.keys(dbSkill?.resources || {})).toHaveLength(2);
@@ -294,13 +300,14 @@ describe('SkillImporter', () => {
       });
 
       expect(result).toBeDefined();
-      expect(result.name).toBe('GitHub Skill');
-      expect(result.identifier).toBe('github.lobehub.skill-demo');
-      expect(result.source).toBe('market');
+      expect(result.status).toBe('created');
+      expect(result.skill.name).toBe('GitHub Skill');
+      expect(result.skill.identifier).toBe('github.lobehub.skill-demo');
+      expect(result.skill.source).toBe('market');
 
       // Verify manifest contains repository info
       const dbSkill = await db.query.agentSkills.findFirst({
-        where: eq(agentSkills.id, result.id),
+        where: eq(agentSkills.id, result.skill.id),
       });
       expect(dbSkill?.manifest).toMatchObject({
         gitUrl: 'https://github.com/lobehub/skill-demo',
@@ -328,7 +335,8 @@ describe('SkillImporter', () => {
       });
 
       expect(result).toBeDefined();
-      expect(result.identifier).toBe('github.openclaw.openclaw.skills.skill-creator');
+      expect(result.status).toBe('created');
+      expect(result.skill.identifier).toBe('github.openclaw.openclaw.skills.skill-creator');
 
       // Verify parseZipPackage was called with basePath and repackSkillZip
       expect(mockParserInstance.parseZipPackage).toHaveBeenCalledWith(expect.any(Buffer), {
@@ -357,8 +365,9 @@ describe('SkillImporter', () => {
         gitUrl: 'https://github.com/lobehub/skill-update',
       });
 
-      expect(first.name).toBe('Original Name');
-      expect(first.content).toBe('# Original content');
+      expect(first.status).toBe('created');
+      expect(first.skill.name).toBe('Original Name');
+      expect(first.skill.content).toBe('# Original content');
 
       // Second import (should update)
       mockParserInstance.parseZipPackage.mockResolvedValueOnce({
@@ -372,9 +381,10 @@ describe('SkillImporter', () => {
         gitUrl: 'https://github.com/lobehub/skill-update',
       });
 
-      expect(second.id).toBe(first.id); // Same skill updated
-      expect(second.name).toBe('Updated Name');
-      expect(second.content).toBe('# Updated content');
+      expect(second.status).toBe('updated');
+      expect(second.skill.id).toBe(first.skill.id); // Same skill updated
+      expect(second.skill.name).toBe('Updated Name');
+      expect(second.skill.content).toBe('# Updated content');
 
       // Verify only one skill exists in database
       const dbSkills = await db
@@ -474,7 +484,8 @@ describe('SkillImporter', () => {
       });
 
       expect(result).toBeDefined();
-      expect(result.zipFileHash).toBe(zipHash);
+      expect(result.status).toBe('created');
+      expect(result.skill.zipFileHash).toBe(zipHash);
 
       // Verify: globalFiles should have the record
       const globalFileRecord = await db.query.globalFiles.findFirst({
@@ -637,7 +648,8 @@ describe('SkillImporter', () => {
       });
 
       expect(first).toBeDefined();
-      expect(first.zipFileHash).toBe(zipHash);
+      expect(first.status).toBe('created');
+      expect(first.skill.zipFileHash).toBe(zipHash);
 
       // Record how many times parseZipPackage was called
       const parseCallCountAfterFirst = mockParserInstance.parseZipPackage.mock.calls.length;
@@ -647,9 +659,10 @@ describe('SkillImporter', () => {
         gitUrl: 'https://github.com/lobehub/skill-dedup',
       });
 
-      // Should return the existing skill
-      expect(second.id).toBe(first.id);
-      expect(second.zipFileHash).toBe(zipHash);
+      // Should return the existing skill with 'unchanged' status
+      expect(second.status).toBe('unchanged');
+      expect(second.skill.id).toBe(first.skill.id);
+      expect(second.skill.zipFileHash).toBe(zipHash);
 
       // parseZipPackage should be called again (to get the new hash)
       // but we should verify no resource storage happened
@@ -704,8 +717,9 @@ describe('SkillImporter', () => {
         gitUrl: 'https://github.com/lobehub/skill-update-content',
       });
 
-      expect(first.content).toBe('# Original Content');
-      expect(first.zipFileHash).toBe('hash-v1');
+      expect(first.status).toBe('created');
+      expect(first.skill.content).toBe('# Original Content');
+      expect(first.skill.zipFileHash).toBe('hash-v1');
       const uploadCountAfterFirst = mockUploadBuffer.mock.calls.length;
 
       // Second import with different zipHash (content changed)
@@ -721,9 +735,10 @@ describe('SkillImporter', () => {
       });
 
       // Should update the existing skill
-      expect(second.id).toBe(first.id);
-      expect(second.content).toBe('# Updated Content');
-      expect(second.zipFileHash).toBe('hash-v2');
+      expect(second.status).toBe('updated');
+      expect(second.skill.id).toBe(first.skill.id);
+      expect(second.skill.content).toBe('# Updated Content');
+      expect(second.skill.zipFileHash).toBe('hash-v2');
 
       // uploadBuffer should be called again for the new ZIP
       expect(mockUploadBuffer.mock.calls.length).toBe(uploadCountAfterFirst + 1);
@@ -796,6 +811,7 @@ describe('SkillImporter', () => {
       // Create skill for first user
       await importer.createUserSkill({
         content: '# User 1 Skill',
+        description: 'User 1 skill',
         identifier: 'isolation-test-skill',
         name: 'User 1 Skill',
       });
@@ -811,6 +827,7 @@ describe('SkillImporter', () => {
       // because findByIdentifier filters by userId
       const otherResult = await otherImporter.createUserSkill({
         content: '# User 2 Skill',
+        description: 'User 2 skill',
         identifier: 'isolation-test-skill', // Same identifier, different user
         name: 'User 2 Skill',
       });
