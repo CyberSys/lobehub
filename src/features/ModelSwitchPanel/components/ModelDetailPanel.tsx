@@ -28,16 +28,13 @@ const getPrice = (pricing: Pricing) => {
   const inputRate = getTextInputUnitRate(pricing);
   const outputRate = getTextOutputUnitRate(pricing);
 
-  const inputPrice = inputRate
-    ? formatPriceByCurrency(inputRate, pricing?.currency as ModelPriceCurrency)
-    : '0';
-  const outputPrice = outputRate
-    ? formatPriceByCurrency(outputRate, pricing?.currency as ModelPriceCurrency)
-    : '0';
-
   return {
-    input: Number(inputPrice),
-    output: Number(outputPrice),
+    input: inputRate
+      ? formatPriceByCurrency(inputRate, pricing?.currency as ModelPriceCurrency)
+      : '0',
+    output: outputRate
+      ? formatPriceByCurrency(outputRate, pricing?.currency as ModelPriceCurrency)
+      : '0',
   };
 };
 

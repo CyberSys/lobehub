@@ -145,7 +145,6 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
               <DropdownMenuPortal>
                 <DropdownMenuPositioner
                   anchor={null}
-                  collisionAvoidance={{ side: 'none' }}
                   placement="right"
                   sideOffset={8}
                 >
@@ -182,7 +181,6 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
               <DropdownMenuPortal>
                 <DropdownMenuPositioner
                   anchor={null}
-                  collisionAvoidance={{ side: 'none' }}
                   placement="right"
                   sideOffset={8}
                 >

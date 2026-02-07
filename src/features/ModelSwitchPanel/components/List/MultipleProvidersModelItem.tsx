@@ -49,7 +49,8 @@ export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
       }
     }, [isScrolling]);
 
-    const isActive = data.providers.some((p) => menuKey(p.id, data.model.id) === activeKey);
+    const activeProvider = data.providers.find((p) => menuKey(p.id, data.model.id) === activeKey);
+    const isActive = !!activeProvider;
 
     return (
       <DropdownMenuSubmenuRoot open={submenuOpen} onOpenChange={setSubmenuOpen}>
@@ -67,13 +68,12 @@ export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
         <DropdownMenuPortal>
           <DropdownMenuPositioner
             anchor={null}
-            collisionAvoidance={{ side: 'none' }}
             placement="right"
             sideOffset={8}
           >
             <DropdownMenuPopup className={cx(styles.detailPopup, styles.dropdownMenu)}>
               <ModelDetailPanel model={data.model} />
-              {extraControls?.(data.model.id, data.providers[0].id)}
+              {extraControls?.(data.model.id, (activeProvider ?? data.providers[0]).id)}
               <DropdownMenuGroup>
                 <DropdownMenuGroupLabel>
                   {t('ModelSwitchPanel.useModelFrom')}
